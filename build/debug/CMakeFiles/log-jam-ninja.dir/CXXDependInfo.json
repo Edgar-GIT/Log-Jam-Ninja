@@ -1,0 +1,32 @@
+{
+	"bmi-installation" : null,
+	"compiler-frontend-variant" : "GNU",
+	"compiler-id" : "GNU",
+	"compiler-simulate-id" : "",
+	"config" : "Debug",
+	"cxx-modules" : {},
+	"database-info" : null,
+	"dir-cur-bld" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug",
+	"dir-cur-src" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja",
+	"dir-top-bld" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug",
+	"dir-top-src" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja",
+	"exports" : [],
+	"forward-modules-from-target-dirs" : [],
+	"include-dirs" : 
+	[
+		"/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/src/game",
+		"/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/src/core",
+		"_deps/plf_hive-src"
+	],
+	"language" : "CXX",
+	"linked-target-dirs" : [],
+	"module-dir" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/CMakeFiles/log-jam-ninja.dir",
+	"sources" : 
+	{
+		"CMakeFiles/log-jam-ninja.dir/src/game/main.cpp.o" : 
+		{
+			"language" : "CXX",
+			"source" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/src/game/main.cpp"
+		}
+	}
+}

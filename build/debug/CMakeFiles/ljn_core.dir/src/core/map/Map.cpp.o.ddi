@@ -1,0 +1,11 @@
+{
+"rules": [
+{
+"primary-output": "CMakeFiles/ljn_core.dir/src/core/map/Map.cpp.o",
+"requires": [
+]
+}
+],
+"version": 0,
+"revision": 0
+}

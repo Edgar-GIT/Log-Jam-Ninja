@@ -1,0 +1,4 @@
+/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/foo.dir
+/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/boo.dir
+/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/edit_cache.dir
+/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/rebuild_cache.dir

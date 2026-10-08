@@ -1,0 +1,9 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/cmake_install.cmake",
+		"/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/_deps/nfd-build/cmake_install.cmake",
+		"/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/_deps/nfd-build/src/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

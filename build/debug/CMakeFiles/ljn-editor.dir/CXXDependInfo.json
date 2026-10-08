@@ -1,0 +1,69 @@
+{
+	"bmi-installation" : null,
+	"compiler-frontend-variant" : "GNU",
+	"compiler-id" : "GNU",
+	"compiler-simulate-id" : "",
+	"config" : "Debug",
+	"cxx-modules" : {},
+	"database-info" : null,
+	"dir-cur-bld" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug",
+	"dir-cur-src" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja",
+	"dir-top-bld" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug",
+	"dir-top-src" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja",
+	"exports" : [],
+	"forward-modules-from-target-dirs" : [],
+	"include-dirs" : 
+	[
+		"/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/src/editor",
+		"/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/src/core",
+		"_deps/nfd-src/src/include",
+		"_deps/plf_hive-src",
+		"_deps/raygui-src/src"
+	],
+	"language" : "CXX",
+	"linked-target-dirs" : [],
+	"module-dir" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/CMakeFiles/ljn-editor.dir",
+	"sources" : 
+	{
+		"CMakeFiles/ljn-editor.dir/src/editor/Camera.cpp.o" : 
+		{
+			"language" : "CXX",
+			"source" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/src/editor/Camera.cpp"
+		},
+		"CMakeFiles/ljn-editor.dir/src/editor/EditorApp.cpp.o" : 
+		{
+			"language" : "CXX",
+			"source" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/src/editor/EditorApp.cpp"
+		},
+		"CMakeFiles/ljn-editor.dir/src/editor/Grid.cpp.o" : 
+		{
+			"language" : "CXX",
+			"source" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/src/editor/Grid.cpp"
+		},
+		"CMakeFiles/ljn-editor.dir/src/editor/History.cpp.o" : 
+		{
+			"language" : "CXX",
+			"source" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/src/editor/History.cpp"
+		},
+		"CMakeFiles/ljn-editor.dir/src/editor/Palette.cpp.o" : 
+		{
+			"language" : "CXX",
+			"source" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/src/editor/Palette.cpp"
+		},
+		"CMakeFiles/ljn-editor.dir/src/editor/Tools.cpp.o" : 
+		{
+			"language" : "CXX",
+			"source" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/src/editor/Tools.cpp"
+		},
+		"CMakeFiles/ljn-editor.dir/src/editor/main.cpp.o" : 
+		{
+			"language" : "CXX",
+			"source" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/src/editor/main.cpp"
+		},
+		"CMakeFiles/ljn-editor.dir/src/editor/ui/Panels.cpp.o" : 
+		{
+			"language" : "CXX",
+			"source" : "/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/src/editor/ui/Panels.cpp"
+		}
+	}
+}

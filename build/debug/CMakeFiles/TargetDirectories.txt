@@ -1,0 +1,10 @@
+/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/CMakeFiles/ljn_core.dir
+/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/CMakeFiles/log-jam-ninja.dir
+/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/CMakeFiles/ljn-editor.dir
+/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/CMakeFiles/edit_cache.dir
+/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/CMakeFiles/rebuild_cache.dir
+/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/_deps/nfd-build/CMakeFiles/edit_cache.dir
+/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/_deps/nfd-build/CMakeFiles/rebuild_cache.dir
+/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/_deps/nfd-build/src/CMakeFiles/nfd.dir
+/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/_deps/nfd-build/src/CMakeFiles/edit_cache.dir
+/home/edgar/Edgar/CS/projects/c++_projects/Log-Jam-Ninja/build/debug/_deps/nfd-build/src/CMakeFiles/rebuild_cache.dir

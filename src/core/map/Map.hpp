@@ -10,6 +10,7 @@
 #include <span>
 #include <string>
 #include <vector>
+#include "util/Contracts.hpp"
 
 namespace ljn { //variables space for the map engine
 
@@ -55,7 +56,7 @@ struct PlacedTile {
 };
 
 //reasons why creating a map or adding a tile type can fail
-enum class MapError : std::uint8_t { InvalidSize, InvalidTileSize };
+enum class MapError : std::uint8_t { InvalidSize, InvalidTileSize, PaletteFull };
 
 //reasons why a tile cannot be placed
 enum class PlaceError : std::uint8_t { UnknownTile, OutOfBounds, Overlap };
@@ -140,12 +141,12 @@ private:
     Map(int width, int height);
 
     //converts a cell into its position in the flat slot array
-    [[nodiscard]] constexpr std::size_t index(Cell c) const noexcept{
-        pre(inBounds(c));
+    [[nodiscard]] constexpr std::size_t index(Cell c) const noexcept
+        LJN_PRE(inBounds(c))
     {
-        return static_cast<std::size_t>(c.y) * static_cast<std::size_t>(m_width) + static_cast<std::size_t>(c.x);
+        return static_cast<std::size_t>(c.y) * static_cast<std::size_t>(m_width)
+             + static_cast<std::size_t>(c.x);
     }
-
     int m_width;
     int m_height;
 

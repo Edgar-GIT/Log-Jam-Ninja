@@ -12,7 +12,7 @@
 #include <vector>
 #include "util/Contracts.hpp"
 
-namespace ljn { //variables space for the map engine
+namespace ljn { 
 
 //size of one cell, sprites can be bigger and occupy more cells
 inline constexpr int kCellSize = 32;

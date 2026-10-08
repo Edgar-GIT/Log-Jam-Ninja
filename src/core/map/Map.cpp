@@ -1,14 +1,11 @@
 // Map.cpp - implementation of the Map class declared in Map.hpp.
 #include "map/Map.hpp"
-
-// Standard library headers used below.
 #include <algorithm>
 #include <limits>
 #include <utility>
 
 namespace ljn {
 
-// Builds an empty map, or fails if the size is outside the allowed range.
 std::expected<Map, MapError> Map::create(int width, int height) {
     if (width < 1 || width > kMaxWidth || height < 1 || height > kMaxHeight) {
         return std::unexpected(MapError::InvalidSize);
@@ -16,18 +13,12 @@ std::expected<Map, MapError> Map::create(int width, int height) {
     return Map{width, height};
 }
 
-// Stores the size and creates width * height empty slots.
-Map::Map(int width, int height)
-    : m_width{width},
-      m_height{height},
-      m_slots(static_cast<std::size_t>(width) * static_cast<std::size_t>(height)) {}
+Map::Map(int width, int height): m_width{width},m_height{height},m_slots(static_cast<std::size_t>(width) * static_cast<std::size_t>(height)) {}
 
-// Returns the tile ID covering the cell, or kEmptyTile if there is none.
 TileId Map::tile(Cell c) const noexcept {
     return inBounds(c) ? m_slots[index(c)].id : kEmptyTile;
 }
 
-// Walks back from any cell of a tile to the tile's top-left cell.
 Cell Map::originOf(Cell c) const noexcept {
     if (!inBounds(c)) {
         return c;
@@ -36,12 +27,10 @@ Cell Map::originOf(Cell c) const noexcept {
     return {c.x - slot.dx, c.y - slot.dy};
 }
 
-// A cell is free if it is inside the map and nothing covers it.
 bool Map::isFree(Cell c) const noexcept {
     return inBounds(c) && m_slots[index(c)].id == kEmptyTile;
 }
 
-// Checks every cell the tile would cover, without changing anything.
 bool Map::canPlace(Cell origin, TileId id) const noexcept {
     if (!hasTile(id)) {
         return false;
@@ -58,7 +47,6 @@ bool Map::canPlace(Cell origin, TileId id) const noexcept {
     return true;
 }
 
-// Places a tile: validates first, then writes every cell it covers.
 std::expected<void, PlaceError> Map::place(Cell origin, TileId id) {
     if (!hasTile(id)) {
         return std::unexpected(PlaceError::UnknownTile);
@@ -93,7 +81,6 @@ std::expected<void, PlaceError> Map::place(Cell origin, TileId id) {
     return {};
 }
 
-// Erases the whole tile that covers the cell and reports what was removed.
 std::optional<PlacedTile> Map::erase(Cell c) {
     if (!inBounds(c)) {
         return std::nullopt;
@@ -114,12 +101,10 @@ std::optional<PlacedTile> Map::erase(Cell c) {
     return PlacedTile{origin, id};
 }
 
-// Looks up in the solid table whether the tile covering the cell blocks movement.
 bool Map::isSolid(Cell c) const noexcept {
     return m_solidLut[tile(c)] != 0;
 }
 
-// Adds a tile type to the palette after checking its size.
 std::expected<TileId, MapError> Map::addTileDef(TileDef def) {
     if (def.pixelWidth < 1 || def.pixelHeight < 1
         || def.cellsWide() > kMaxTileCells || def.cellsHigh() > kMaxTileCells) {
@@ -134,12 +119,10 @@ std::expected<TileId, MapError> Map::addTileDef(TileDef def) {
     return static_cast<TileId>(m_defs.size());
 }
 
-// An ID is valid if it is not 0 and not past the end of the palette.
 bool Map::hasTile(TileId id) const noexcept {
     return id != kEmptyTile && static_cast<std::size_t>(id) <= m_defs.size();
 }
 
-// Sets the spawn point if the cell is inside the map.
 bool Map::setSpawn(Cell c) noexcept {
     if (!inBounds(c)) {
         return false;
@@ -149,7 +132,6 @@ bool Map::setSpawn(Cell c) noexcept {
     return true;
 }
 
-// Inserts a checkpoint in sorted position, refusing duplicates and cells outside the map.
 bool Map::addCheckpoint(Cell c) {
     if (!inBounds(c)) {
         return false;
@@ -162,7 +144,6 @@ bool Map::addCheckpoint(Cell c) {
     return true;
 }
 
-// Removes a checkpoint if it exists.
 bool Map::removeCheckpoint(Cell c) {
     const auto it = std::ranges::lower_bound(m_checkpoints, c);
     if (it == m_checkpoints.end() || *it != c) {

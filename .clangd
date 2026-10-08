@@ -1,0 +1,9 @@
+CompileFlags:
+  CompilationDatabase: build/debug
+  # Flags only GCC understands; clangd is clang-based and would flag them as errors.
+  Remove:
+    - -fcontracts
+    - -freflection
+    - -fmodules-ts
+    - -fdeps-format=*
+    - -fmodule-mapper=*

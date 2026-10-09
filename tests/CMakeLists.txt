@@ -1,6 +1,6 @@
-# One test program that uses the shared core library.
-add_executable(ljn_tests map_test.cpp)
-target_link_libraries(ljn_tests PRIVATE ljn_core ljn_warnings)
-
-# Register it so "ctest" can run it.
-add_test(NAME ljn_tests COMMAND ljn_tests)
+#one small program per test file, all linked to the shared core
+foreach(name map_test validator_test)
+  add_executable(${name} ${name}.cpp)
+  target_link_libraries(${name} PRIVATE ljn_core ljn_warnings)
+  add_test(NAME ${name} COMMAND ${name})
+endforeach()

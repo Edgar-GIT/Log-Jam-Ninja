@@ -1,28 +1,10 @@
 // map_test.cpp - checks that Map creates, places, erases and looks up tiles correctly.
 
-// Standard library headers used below.
-#include <cstdio>
-#include <cstdlib>
 #include <print>
-
-// The code under test.
+#include "check.hpp"
 #include "map/Map.hpp"
 
 using namespace ljn;
-
-// Stops the program with a message if the condition is false.
-#define CHECK(...)                                                                    \
-    do {                                                                              \
-        if (!(__VA_ARGS__)) {                                                         \
-            std::println(stderr, "FAIL {}:{}  {}", __FILE__, __LINE__, #__VA_ARGS__); \
-            std::exit(1);                                                             \
-        }                                                                             \
-    } while (false)
-
-// True if the result is an error and it is exactly the expected one.
-static bool failsWith(const auto& result, auto error) {
-    return !result.has_value() && result.error() == error;
-}
 
 // Builds an empty map for a test.
 static Map makeMap(int width = 16, int height = 10) {

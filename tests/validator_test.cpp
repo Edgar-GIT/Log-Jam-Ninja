@@ -90,7 +90,8 @@ static void testBlockOnFloor() {
 
 //a big tile counts all the cells it covers, and the minimum can be changed
 static void testBigTileAndRules() {
-    Map map = makeMap();
+    //20 wide, so the floor has 20 cells and stays above the strict minimum below
+    Map map = makeMap(20, 10);
     const TileId ground = addTile(map, 32, 32);
     const TileId big = addTile(map, 128, 128);
     fillFloor(map, ground);
@@ -100,11 +101,11 @@ static void testBigTileAndRules() {
     //16 cells is enough with the default minimum of 3
     CHECK(validate(map).count(IssueCode::StrayTiles) == 0);
 
-    //with a minimum of 17 the same tile becomes a mistake, one issue per cell
+    //with a minimum of 17 the big tile becomes a mistake, one issue per cell
+    //(the floor has 20 cells, so it still passes)
     const auto strict = validate(map, Rules{.minStructureCells = 17});
     CHECK(strict.count(IssueCode::StrayTiles) == 16);
 }
-
 //the spawn must exist, must not be inside a block and needs ground below
 static void testSpawn() {
     Map map = makeMap();

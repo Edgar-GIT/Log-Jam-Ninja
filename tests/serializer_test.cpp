@@ -32,7 +32,7 @@ static bool sameMap(const Map& a, const Map& b) {
         return false;
     }
 
-    //palette
+    //palette, including where each tile starts inside its image
     if (a.tileDefs().size() != b.tileDefs().size()) {
         return false;
     }
@@ -40,7 +40,8 @@ static bool sameMap(const Map& a, const Map& b) {
         const TileDef& da = a.tileDefs()[i];
         const TileDef& db = b.tileDefs()[i];
         if (da.file != db.file || da.pixelWidth != db.pixelWidth
-            || da.pixelHeight != db.pixelHeight || da.solid != db.solid) {
+            || da.pixelHeight != db.pixelHeight || da.solid != db.solid
+            || da.sourceX != db.sourceX || da.sourceY != db.sourceY) {
             return false;
         }
     }
@@ -79,7 +80,14 @@ static Map makeFullMap() {
     Map map = makeMap();
     const TileId small = addTile(map, 32, 32);
     const TileId big = addTile(map, 128, 128);
-    const TileId decor = addTile(map, 64, 32, false);
+
+    //a decor tile cut out of a sheet, it starts at (128, 64) inside the image
+    const TileId decor = map.addTileDef({.file = "tiles/sheet.png",
+                                         .pixelWidth = 64,
+                                         .pixelHeight = 32,
+                                         .solid = false,
+                                         .sourceX = 128,
+                                         .sourceY = 64}).value();
 
     for (int x = 0; x < map.width(); ++x) {
         CHECK(map.place({x, 11}, small).has_value());
@@ -98,7 +106,8 @@ struct Parts {
     int cellSize = kCellSize;
     int width = 8;
     int height = 6;
-    std::string tiles = R"([{"file":"a.png","pixelWidth":32,"pixelHeight":32,"solid":true}])";
+    std::string tiles =
+        R"([{"file":"a.png","pixelWidth":32,"pixelHeight":32,"solid":true,"sourceX":0,"sourceY":0}])";
     std::string placed = "[]";
     std::string checkpoints = "[]";
     std::string extra;  //anything added at the end, for example a spawn
@@ -124,6 +133,9 @@ static void testRoundTrip() {
 
     //20 floor tiles + 1 big tile + 1 decor tile, the big tile is written once, not 16 times
     CHECK(countOf(text, "\"tile\"") == 22);
+
+    //the cut out tile keeps the place it starts in the image
+    CHECK(loaded->tileDefs()[2].sourceX == 128 && loaded->tileDefs()[2].sourceY == 64);
 }
 
 //a map with no tiles, no spawn and no checkpoints also survives
@@ -200,8 +212,9 @@ static void testHeaderErrors() {
 //missing fields, wrong types and missing lists
 static void testFormatErrors() {
     //the tile has no "solid" field
-    CHECK(failsWith(fromJson(makeJson({.tiles = R"([{"file":"a.png","pixelWidth":32,"pixelHeight":32}])"})),
-                    IoError::InvalidFormat));
+    CHECK(failsWith(
+        fromJson(makeJson({.tiles = R"([{"file":"a.png","pixelWidth":32,"pixelHeight":32,"sourceX":0,"sourceY":0}])"})),
+        IoError::InvalidFormat));
 
     //the width is text instead of a number
     const std::string wrongType =
@@ -216,8 +229,9 @@ static void testFormatErrors() {
 
 //tile types with a bad size
 static void testTileErrors() {
-    CHECK(failsWith(fromJson(makeJson({.tiles = R"([{"file":"a.png","pixelWidth":0,"pixelHeight":32,"solid":true}])"})),
-                    IoError::InvalidTile));
+    CHECK(failsWith(
+        fromJson(makeJson({.tiles = R"([{"file":"a.png","pixelWidth":0,"pixelHeight":32,"solid":true,"sourceX":0,"sourceY":0}])"})),
+        IoError::InvalidTile));
 }
 
 //placed tiles that do not exist, overlap or do not fit

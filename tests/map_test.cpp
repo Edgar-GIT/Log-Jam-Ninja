@@ -6,12 +6,12 @@
 
 using namespace ljn;
 
-// Builds an empty map for a test.
+//creates an empty fake map
 static Map makeMap(int width = 16, int height = 10) {
     return Map::create(width, height).value();
 }
 
-// Adds a tile type with the given pixel size and returns its ID.
+//adds a tile type with the given pixel size and returns its ID
 static TileId addTile(Map& map, int pixelWidth, int pixelHeight, bool solid = true) {
     const TileDef def{.file = "tiles/test.png",
                       .pixelWidth = pixelWidth,
@@ -20,7 +20,7 @@ static TileId addTile(Map& map, int pixelWidth, int pixelHeight, bool solid = tr
     return map.addTileDef(def).value();
 }
 
-// Valid sizes work; zero, negative and too-large sizes fail.
+//testing sprite sizes; zero, negative and too-large sizes fail
 static void testCreate() {
     CHECK(Map::create(16, 10).has_value());
     CHECK(Map::create(16, 10)->width() == 16);
@@ -29,7 +29,7 @@ static void testCreate() {
     CHECK(failsWith(Map::create(Map::kMaxWidth + 1, 10), MapError::InvalidSize));
 }
 
-// The palette hands out IDs 1, 2, 3... and rejects bad sprite sizes.
+//the palette hands out IDs and rejects bad sprite sizes
 static void testPalette() {
     Map map = makeMap();
     CHECK(!map.hasTile(0));
@@ -41,7 +41,7 @@ static void testPalette() {
     CHECK(map.hasTile(tileBig));
     CHECK(!map.hasTile(4));
 
-    // Cell counts are rounded up: 100 px -> 4 cells, 40 px -> 2 cells.
+    //cell counts are rounded up, 100 px -> 4 cells, 40 px -> 2 cells
     CHECK(map.tileDefs()[1].cellsWide() == 4 && map.tileDefs()[1].cellsHigh() == 4);
     CHECK(map.tileDefs()[2].cellsWide() == 4 && map.tileDefs()[2].cellsHigh() == 2);
 
@@ -54,7 +54,7 @@ static void testPalette() {
     CHECK(failsWith(map.addTileDef(huge), MapError::InvalidTileSize));
 }
 
-// A one-cell tile can be placed and erased.
+//aone-cell tile can be placed and erased
 static void testSingleTile() {
     Map map = makeMap();
     const TileId id = addTile(map, 32, 32);
@@ -72,7 +72,7 @@ static void testSingleTile() {
     CHECK(!map.erase({3, 4}).has_value());
 }
 
-// A 128x128 tile covers 4x4 cells and is erased as a whole.
+//a 128x128 tile covers 4x4 cells and is erased as a whole
 static void testBigTile() {
     Map map = makeMap();
     const TileId id = addTile(map, 128, 128);
@@ -88,7 +88,7 @@ static void testBigTile() {
     CHECK(map.originOf({5, 6}) == Cell{2, 3});
     CHECK(map.originOf({2, 3}) == Cell{2, 3});
 
-    // Erasing from the middle of the tile removes the whole tile.
+    //erasing from the middle of the tile removes the whole tile
     const auto erased = map.erase({4, 5});
     CHECK(erased.has_value() && erased->origin == Cell{2, 3} && erased->id == id);
     for (int y = 3; y < 7; ++y) {
@@ -98,26 +98,26 @@ static void testBigTile() {
     }
 }
 
-// Placing fails with the right error and never changes the map when it fails.
+//placing fails with the right error and never changes the map when it fails
 static void testPlaceErrors() {
     Map map = makeMap();  // 16 x 10 cells
     const TileId tileSmall = addTile(map, 32, 32);
     const TileId tileBig = addTile(map, 128, 128);
 
-    // IDs that are not in the palette.
+    //IDs that are not in the palette
     CHECK(failsWith(map.place({0, 0}, 0), PlaceError::UnknownTile));
     CHECK(failsWith(map.place({0, 0}, 99), PlaceError::UnknownTile));
 
-    // Outside the map: negative origin, past the right edge, past the bottom edge.
+    //outside the map: negative origin, past the right edge, past the bottom edge
     CHECK(failsWith(map.place({-1, 0}, tileSmall), PlaceError::OutOfBounds));
     CHECK(failsWith(map.place({14, 0}, tileBig), PlaceError::OutOfBounds));
     CHECK(failsWith(map.place({0, 8}, tileBig), PlaceError::OutOfBounds));
     CHECK(!map.canPlace({14, 0}, tileBig));
 
-    // A 4x4 tile fits exactly in the bottom-right corner.
+    //a 4x4 tile fits exactly in the bottom-right corner
     CHECK(map.canPlace({12, 6}, tileBig));
 
-    // Overlapping another tile.
+    //overlapping another tile
     CHECK(map.place({3, 3}, tileSmall).has_value());
     CHECK(failsWith(map.place({1, 1}, tileBig), PlaceError::Overlap));
     CHECK(!map.canPlace({1, 1}, tileBig));
@@ -125,7 +125,7 @@ static void testPlaceErrors() {
     CHECK(map.tile({3, 3}) == tileSmall);
 }
 
-// Solidity follows the tile type, for every cell the tile covers.
+//solidity follows the tile type for every cell the tile covers
 static void testSolid() {
     Map map = makeMap();
     const TileId wall = addTile(map, 64, 32, true);
@@ -142,7 +142,7 @@ static void testSolid() {
     CHECK(!map.isSolid({99, 99}));
 }
 
-// Spawn must be inside the map; checkpoints stay sorted and without duplicates.
+//spawn must be inside the map and  checkpoints stay sorted and without duplicates
 static void testSpawnAndCheckpoints() {
     Map map = makeMap();
 
@@ -169,7 +169,7 @@ static void testSpawnAndCheckpoints() {
     CHECK(map.checkpoints().size() == 2);
 }
 
-// Runs every test; any failed CHECK ends the program with exit code 1.
+//runs every test and any failed CHECK ends the program with exit code 1
 int main() {
     testCreate();
     testPalette();

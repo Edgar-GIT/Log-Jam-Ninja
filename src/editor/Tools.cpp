@@ -40,8 +40,7 @@ void drawHoverCell(Cell cell, float zoom) {
 
 }  //anonymous namespace
 
-void Brush::update(Map& map, const Palette& palette, const ToolState& tools, const EditorCamera& camera,
-                   Vector2 viewSize, bool inputEnabled) {
+void Brush::update(Map& map, const Palette& palette, const ToolState& tools, const EditorCamera& camera,Vector2 viewSize, bool inputEnabled) {
     m_hovered.reset();
     if (!inputEnabled) {
         m_stroke = Stroke::None;

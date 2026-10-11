@@ -31,12 +31,16 @@ struct Cell {
     constexpr auto operator<=>(const Cell&) const = default;
 };
 
-//one tile type in the palette: its image, its size in pixels and whether it blocks movement
+//one tile type in the palette: its image, the part of the image that is the tile, and whether it blocks movement
 struct TileDef {
     std::string file;  //path relative to assets/, e.g. "tiles/grass.png"
     int pixelWidth{kCellSize};
     int pixelHeight{kCellSize};
     bool solid{true};
+
+    //where the tile starts inside the image, (0, 0) when the whole image is the tile
+    int sourceX{0};
+    int sourceY{0};
 
     //how many cells the sprite covers horizontally (rounded up)
     [[nodiscard]] constexpr int cellsWide() const noexcept {
@@ -48,7 +52,6 @@ struct TileDef {
         return (pixelHeight + kCellSize - 1) / kCellSize;
     }
 };
-
 //a tile that was placed on the map: its top-left cell and its type
 struct PlacedTile {
     Cell origin;

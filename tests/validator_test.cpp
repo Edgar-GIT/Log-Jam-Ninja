@@ -172,6 +172,20 @@ static void testCheckpointNoGround() {
     CHECK(!report.hasErrors());
 }
 
+//details that are not solid are never reported as loose tiles
+static void testDetailsAreNotStray() {
+    Map map = makeMap();
+    const TileId ground = addTile(map, 32, 32);
+    const TileId detail = addTile(map, 32, 32, false);
+    fillFloor(map, ground);
+    CHECK(map.setSpawn({2, 8}));
+
+    //a detail floating in the air, nothing around it
+    CHECK(map.place({5, 3}, detail).has_value());
+    CHECK(validate(map).count(IssueCode::StrayTiles) == 0);
+    CHECK(validate(map).issues.empty());
+}
+
 //every issue code has a text for the editor
 static void testDescribe() {
     for (int i = 0; i <= static_cast<int>(IssueCode::CheckpointNoGround); ++i) {
@@ -185,6 +199,7 @@ int main() {
     testValidMap();
     testStrayTiles();
     testBlockOnFloor();
+    testDetailsAreNotStray();
     testBigTileAndRules();
     testSpawn();
     testSpawnOverPit();

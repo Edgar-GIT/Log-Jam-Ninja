@@ -33,7 +33,7 @@ void checkEmptyColumns(const Map& map, ValidationReport& report) {
     }
 }
 
-//groups of connected cells smaller than the minimum are probably mistakes
+//groups of connected solid cells smaller than the minimum are probably mistakes
 void checkStrayTiles(const Map& map, int minCells, ValidationReport& report) {
     const auto width = static_cast<std::size_t>(map.width());
     std::vector<std::uint8_t> visited(width * static_cast<std::size_t>(map.height()), 0);
@@ -48,11 +48,11 @@ void checkStrayTiles(const Map& map, int minCells, ValidationReport& report) {
     for (std::int32_t y = 0; y < map.height(); ++y) {
         for (std::int32_t x = 0; x < map.width(); ++x) {
             const Cell start{x, y};
-            if (visited[indexOf(start)] != 0 || map.tile(start) == kEmptyTile) {
+            if (visited[indexOf(start)] != 0 || !map.isSolid(start)) {
                 continue;
             }
 
-            //flood fill: collect every cell connected to this one
+            //flood fill: collect every solid cell connected to this one
             group.clear();
             visited[indexOf(start)] = 1;
             stack.push_back(start);
@@ -64,8 +64,7 @@ void checkStrayTiles(const Map& map, int minCells, ValidationReport& report) {
 
                 for (const Cell step : kNeighbours) {
                     const Cell next{current.x + step.x, current.y + step.y};
-                    if (!map.inBounds(next) || visited[indexOf(next)] != 0
-                        || map.tile(next) == kEmptyTile) {
+                    if (!map.inBounds(next) || visited[indexOf(next)] != 0 || !map.isSolid(next)) {
                         continue;
                     }
                     visited[indexOf(next)] = 1;
@@ -82,7 +81,6 @@ void checkStrayTiles(const Map& map, int minCells, ValidationReport& report) {
         }
     }
 }
-
 //true if there is a solid cell somewhere below this one, in the same column
 bool hasSolidBelow(const Map& map, Cell c) {
     for (std::int32_t y = c.y + 1; y < map.height(); ++y) {

@@ -111,9 +111,7 @@ std::string toJson(const Map& map) {
         for (std::size_t x = 0; x < grid.extent(1); ++x) {
             const Map::Slot& slot = grid[y, x];
             if (slot.id != kEmptyTile && slot.dx == 0 && slot.dy == 0) {
-                placed.push_back(toJsonObject(PlacedEntry{.tile = slot.id,
-                                                          .x = static_cast<int>(x),
-                                                          .y = static_cast<int>(y)}));
+                placed.push_back(toJsonObject(PlacedEntry{.tile = slot.id,.x = static_cast<int>(x),.y = static_cast<int>(y)}));
             }
         }
     }

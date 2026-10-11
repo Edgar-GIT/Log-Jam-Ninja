@@ -15,8 +15,7 @@ constexpr Color kEraseFill{255, 60, 60, 70};
 //rectangle of a group of cells, in map pixels
 Rectangle cellsRect(Cell origin, int cellsWide, int cellsHigh) {
     const auto size = static_cast<float>(kCellSize);
-    return {static_cast<float>(origin.x) * size, static_cast<float>(origin.y) * size,
-            static_cast<float>(cellsWide) * size, static_cast<float>(cellsHigh) * size};
+    return {static_cast<float>(origin.x) * size, static_cast<float>(origin.y) * size,static_cast<float>(cellsWide) * size, static_cast<float>(cellsHigh) * size};
 }
 
 //moves a cell back to the grid of the tile's own size, so a 2x2 tile only lands on even cells

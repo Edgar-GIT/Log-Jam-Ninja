@@ -1,6 +1,8 @@
-// Tools.cpp - implementation of the brush: painting, erasing and the preview.
+// Tools.cpp - implementation of the brush: painting, erasing, spawn and checkpoints, and the preview.
 
 #include "Tools.hpp"
+
+#include "Overlays.hpp"
 
 namespace ljn {
 namespace {
@@ -12,10 +14,14 @@ constexpr Color kBlockedFill{255, 60, 60, 110};
 constexpr Color kBlockedLine{255, 70, 70, 255};
 constexpr Color kEraseFill{255, 60, 60, 70};
 
+//how see through the flag is in the preview
+constexpr float kGhostAlpha = 0.6f;
+
 //rectangle of a group of cells, in map pixels
 Rectangle cellsRect(Cell origin, int cellsWide, int cellsHigh) {
     const auto size = static_cast<float>(kCellSize);
-    return {static_cast<float>(origin.x) * size, static_cast<float>(origin.y) * size,static_cast<float>(cellsWide) * size, static_cast<float>(cellsHigh) * size};
+    return {static_cast<float>(origin.x) * size, static_cast<float>(origin.y) * size,
+            static_cast<float>(cellsWide) * size, static_cast<float>(cellsHigh) * size};
 }
 
 //moves a cell back to the grid of the tile's own size, so a 2x2 tile only lands on even cells
@@ -38,12 +44,40 @@ void drawHoverCell(Cell cell, float zoom) {
     DrawRectangleLinesEx(rect, 2.0f / zoom, kHoverLine);
 }
 
+//one click with the spawn tool or the checkpoint tool: left puts it, right removes it
+void clickObject(Map& map, History& history, Tool tool, Cell cell, bool leftPressed, bool rightPressed) {
+    if (tool == Tool::Spawn) {
+        if (leftPressed) {
+            history.setSpawn(map, cell);
+        } else if (rightPressed && map.hasSpawn() && map.spawn() == cell) {
+            history.clearSpawn(map);
+        }
+    } else {
+        if (leftPressed) {
+            history.addCheckpoint(map, cell);
+        } else if (rightPressed) {
+            history.removeCheckpoint(map, cell);
+        }
+    }
+
+    //every click is its own action
+    history.commit();
+}
+
 }  //anonymous namespace
 
-void Brush::update(Map& map, const Palette& palette, const ToolState& tools, const EditorCamera& camera,Vector2 viewSize, bool inputEnabled) {
+void Brush::endStroke(History& history) {
+    if (m_stroke != Stroke::None) {
+        history.commit();
+        m_stroke = Stroke::None;
+    }
+}
+
+void Brush::update(Map& map, History& history, const Palette& palette, const ToolState& tools,
+                   const EditorCamera& camera, Vector2 viewSize, bool inputEnabled) {
     m_hovered.reset();
     if (!inputEnabled) {
-        m_stroke = Stroke::None;
+        endStroke(history);
         return;
     }
 
@@ -53,15 +87,26 @@ void Brush::update(Map& map, const Palette& palette, const ToolState& tools, con
     if (inView) {
         m_hovered = camera.cellAt(mouse, map);
     }
+    const bool leftPressed = inView && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+    const bool rightPressed = inView && IsMouseButtonPressed(MOUSE_BUTTON_RIGHT);
+
+    //spawn and checkpoint tools work with single clicks, there are no strokes
+    if (tools.tool == Tool::Spawn || tools.tool == Tool::Checkpoint) {
+        endStroke(history);
+        if (m_hovered) {
+            clickObject(map, history, tools.tool, *m_hovered, leftPressed, rightPressed);
+        }
+        return;
+    }
 
     //a stroke starts with a click on the map and lasts until every button is released
-    if (inView && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+    if (leftPressed) {
         m_stroke = tools.tool == Tool::Paint ? Stroke::Paint : Stroke::Erase;
-    } else if (inView && IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+    } else if (rightPressed) {
         m_stroke = Stroke::Erase;
     }
     if (!IsMouseButtonDown(MOUSE_BUTTON_LEFT) && !IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
-        m_stroke = Stroke::None;
+        endStroke(history);
     }
     if (!m_hovered) {
         return;
@@ -69,17 +114,29 @@ void Brush::update(Map& map, const Palette& palette, const ToolState& tools, con
 
     //apply the stroke to the cell under the mouse
     if (m_stroke == Stroke::Erase) {
-        map.erase(*m_hovered);
+        static_cast<void>(history.erase(map, *m_hovered));
     } else if (m_stroke == Stroke::Paint) {
         if (const TileDef* def = selectedDef(map, palette)) {
             const Cell origin = tools.snap ? snapped(*m_hovered, *def) : *m_hovered;
-            map.place(origin, palette.selected());
+            static_cast<void>(history.place(map, origin, palette.selected()));
         }
     }
 }
 
 void Brush::drawPreview(const Map& map, const Palette& palette, const ToolState& tools, float zoom) const {
     if (!m_hovered) {
+        return;
+    }
+
+    //spawn and checkpoint tools: a see through flag in the cell
+    if (tools.tool == Tool::Spawn) {
+        drawHoverCell(*m_hovered, zoom);
+        drawSpawn(*m_hovered, kGhostAlpha);
+        return;
+    }
+    if (tools.tool == Tool::Checkpoint) {
+        drawHoverCell(*m_hovered, zoom);
+        drawCheckpoint(*m_hovered, 0, kGhostAlpha);
         return;
     }
 

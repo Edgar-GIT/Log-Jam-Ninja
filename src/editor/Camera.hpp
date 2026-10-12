@@ -18,6 +18,9 @@ public:
     //puts the view on the bottom left corner of the map
     void jumpToBottomLeft(Vector2 viewSize, const Map& map);
 
+    //centers the view on a cell, the next update keeps it inside the map
+    void centerOn(Cell cell, Vector2 viewSize);
+
     //the raylib camera, to use with BeginMode2D
     [[nodiscard]] const Camera2D& raylib() const noexcept { return m_camera; }
 

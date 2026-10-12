@@ -1,4 +1,4 @@
-// Panels.cpp - the side panel: load button, tools and the list of tile types.
+// Panels.cpp - the side panel: files, undo, tools, the list of tile types and the map check.
 
 //raygui is one header: this is the only file that compiles its code
 #define RAYGUI_IMPLEMENTATION
@@ -22,8 +22,8 @@ constexpr float kGap = 6.0f;
 constexpr int kColumns = 3;
 constexpr float kContentWidth = static_cast<float>(kColumns) * (kThumb + kGap) + kGap;
 
-//space under the list for the info of the selected tile and the hints
-constexpr float kFooter = 176.0f;
+//space under the list: tile info (86), problems label and button (72) and the hints (96)
+constexpr float kFooter = 254.0f;
 
 constexpr Color kThumbBack{40, 42, 56, 255};
 constexpr Color kThumbSelected{255, 220, 80, 255};
@@ -40,28 +40,60 @@ Rectangle fitInside(const Rectangle& box, const TileDef& def) {
     return {box.x + (box.width - width) * 0.5f, box.y + (box.height - height) * 0.5f, width, height};
 }
 
+//a button that is grayed out and ignores clicks when it is not enabled
+bool button(Rectangle bounds, const char* text, bool enabled = true) {
+    if (!enabled) {
+        GuiDisable();
+    }
+    const bool clicked = GuiButton(bounds, text) != 0;
+    if (!enabled) {
+        GuiEnable();
+    }
+    return clicked;
+}
+
 }  //anonymous namespace
 
-PanelResult SidePanel::draw(Rectangle area, const Map& map, Palette& palette, ToolState& tools) {
+PanelResult SidePanel::draw(Rectangle area, const Map& map, Palette& palette, ToolState& tools,
+                            const PanelInfo& info) {
     PanelResult result;
     GuiPanel(area, nullptr);
 
     const float x = area.x + kPad;
     const float width = area.width - 2.0f * kPad;
+    const float half = (width - kGap) * 0.5f;
+    const float bottom = area.y + area.height - kPad;
     float y = area.y + kPad;
 
     //title and the button that opens the import window
     GuiLabel({x, y, width, 28.0f}, "TILES");
     y += 34.0f;
-    if (GuiButton({x, y, width, 40.0f}, "Load tile...")) {
-        result.loadTileClicked = true;
-    }
+    result.loadTileClicked = button({x, y, width, 40.0f}, "Load tile...");
     y += 48.0f;
 
-    //the two tools side by side
-    int active = tools.tool == Tool::Paint ? 0 : 1;
-    GuiToggleGroup({x, y, (width - 3.0f) * 0.5f, 36.0f}, "Paint (B);Erase (E)", &active);
-    tools.tool = active == 0 ? Tool::Paint : Tool::Erase;
+    //open and save, the star says there are unsaved changes
+    result.openClicked = button({x, y, half, 36.0f}, "Open");
+    result.saveClicked = button({x + half + kGap, y, half, 36.0f}, info.dirty ? "Save*" : "Save");
+    y += 44.0f;
+
+    //undo and redo, grayed out when there is nothing to do
+    result.undoClicked = button({x, y, half, 36.0f}, "Undo", info.canUndo);
+    result.redoClicked = button({x + half + kGap, y, half, 36.0f}, "Redo", info.canRedo);
+    y += 44.0f;
+
+    //the four tools in two rows, clicking the active one keeps it active
+    const auto toolButton = [&](Rectangle bounds, const char* text, Tool tool) {
+        bool on = tools.tool == tool;
+        GuiToggle(bounds, text, &on);
+        if (on) {
+            tools.tool = tool;
+        }
+    };
+    toolButton({x, y, half, 36.0f}, "Paint", Tool::Paint);
+    toolButton({x + half + kGap, y, half, 36.0f}, "Erase", Tool::Erase);
+    y += 42.0f;
+    toolButton({x, y, half, 36.0f}, "Spawn", Tool::Spawn);
+    toolButton({x + half + kGap, y, half, 36.0f}, "Checkpoint", Tool::Checkpoint);
     y += 44.0f;
 
     GuiCheckBox({x, y, 28.0f, 28.0f}, "Snap to tile size (G)", &tools.snap);
@@ -72,7 +104,7 @@ PanelResult SidePanel::draw(Rectangle area, const Map& map, Palette& palette, To
     GuiLabel({x, y, width, 24.0f}, std::format("Palette ({})", defs.size()).c_str());
     y += 28.0f;
 
-    const Rectangle list{x, y, width, std::max(96.0f, area.y + area.height - kPad - kFooter - y)};
+    const Rectangle list{x, y, width, std::max(96.0f, bottom - kFooter - y)};
     const int rows = (static_cast<int>(defs.size()) + kColumns - 1) / kColumns;
     const Rectangle content{0.0f, 0.0f, kContentWidth, static_cast<float>(rows) * (kThumb + kGap) + kGap};
     Rectangle view{};
@@ -119,11 +151,23 @@ PanelResult SidePanel::draw(Rectangle area, const Map& map, Palette& palette, To
         GuiLabel({x, y, width, 24.0f}, "No tile selected");
     }
 
+    //the result of the last check and the button that runs the next one
+    const float hintsY = bottom - 88.0f;
+    const float checkY = hintsY - 8.0f - 36.0f;
+    std::string problems = "Map not checked yet";
+    if (info.checked) {
+        problems = info.errors + info.warnings == 0
+                       ? std::string{"No problems"}
+                       : std::format("{} errors, {} warnings", info.errors, info.warnings);
+    }
+    GuiLabel({x, checkY - 28.0f, width, 24.0f}, problems.c_str());
+    result.checkClicked = button({x, checkY, width, 36.0f}, "Check map");
+
     //hints at the bottom
-    const float hintsY = area.y + area.height - kPad - 66.0f;
-    GuiLabel({x, hintsY, width, 22.0f}, "Left click: paint");
-    GuiLabel({x, hintsY + 22.0f, width, 22.0f}, "Right click: erase");
-    GuiLabel({x, hintsY + 44.0f, width, 22.0f}, "Middle mouse: drag map");
+    GuiLabel({x, hintsY, width, 22.0f}, "LMB place, RMB remove");
+    GuiLabel({x, hintsY + 22.0f, width, 22.0f}, "B E S C: pick tool");
+    GuiLabel({x, hintsY + 44.0f, width, 22.0f}, "Ctrl+S/O: save, open");
+    GuiLabel({x, hintsY + 66.0f, width, 22.0f}, "Ctrl+Z/Y: undo, redo");
 
     return result;
 }

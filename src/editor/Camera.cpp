@@ -76,6 +76,14 @@ void EditorCamera::jumpToBottomLeft(Vector2 viewSize, const Map& map) {
     m_camera.target = {0.0f, mapHeight - viewSize.y / m_camera.zoom};
 }
 
+void EditorCamera::centerOn(Cell cell, Vector2 viewSize) {
+    //the target is the map position of the top left corner of the view
+    const auto cellSize = static_cast<float>(kCellSize);
+    const float zoom = m_camera.zoom;
+    m_camera.target = {(static_cast<float>(cell.x) + 0.5f) * cellSize - viewSize.x / (2.0f * zoom),
+                       (static_cast<float>(cell.y) + 0.5f) * cellSize - viewSize.y / (2.0f * zoom)};
+}
+
 std::optional<Cell> EditorCamera::cellAt(Vector2 screenPos, const Map& map) const {
     const Vector2 world = GetScreenToWorld2D(screenPos, m_camera);
     const auto cellSize = static_cast<float>(kCellSize);

@@ -13,6 +13,7 @@
 #include "Tools.hpp"
 #include "map/History.hpp"
 #include "map/Map.hpp"
+#include "ui/AnimImport.hpp"
 #include "ui/Panels.hpp"
 #include "ui/TileImport.hpp"
 #include "validation/Validator.hpp"
@@ -85,6 +86,7 @@ private:
     Brush m_brush;
     SidePanel m_panel;
     TileImportDialog m_import;
+    AnimImportDialog m_animImport;
 
     //the last map check, and the history revision it was made at
     ValidationReport m_report;

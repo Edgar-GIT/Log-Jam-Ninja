@@ -26,6 +26,7 @@ struct PanelInfo {
 //what happened in the panel this frame
 struct PanelResult {
     bool loadTileClicked{false};
+    bool loadAnimatedClicked{false};
     bool openClicked{false};
     bool saveClicked{false};
     bool undoClicked{false};

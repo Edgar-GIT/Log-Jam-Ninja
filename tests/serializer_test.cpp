@@ -32,7 +32,7 @@ static bool sameMap(const Map& a, const Map& b) {
         return false;
     }
 
-    //palette, including where each tile starts inside its image
+    //palette, including the cut out position and the animation of every tile
     if (a.tileDefs().size() != b.tileDefs().size()) {
         return false;
     }
@@ -41,7 +41,8 @@ static bool sameMap(const Map& a, const Map& b) {
         const TileDef& db = b.tileDefs()[i];
         if (da.file != db.file || da.pixelWidth != db.pixelWidth
             || da.pixelHeight != db.pixelHeight || da.solid != db.solid
-            || da.sourceX != db.sourceX || da.sourceY != db.sourceY) {
+            || da.sourceX != db.sourceX || da.sourceY != db.sourceY
+            || da.frames != db.frames || da.frameMs != db.frameMs) {
             return false;
         }
     }
@@ -75,7 +76,7 @@ static std::size_t countOf(const std::string& text, std::string_view needle) {
     return count;
 }
 
-//a map with every feature: small, big and non solid tiles, a floor, spawn and checkpoints
+//a map with every feature: small, big, cut out and animated tiles, a floor, spawn and checkpoints
 static Map makeFullMap() {
     Map map = makeMap();
     const TileId small = addTile(map, 32, 32);
@@ -89,11 +90,18 @@ static Map makeFullMap() {
                                          .sourceX = 128,
                                          .sourceY = 64}).value();
 
+    //an animated tile: three frames, 120 ms each
+    const TileId torch = map.addTileDef({.file = "tiles/torch/0.png",
+                                         .solid = false,
+                                         .frames = {"tiles/torch/0.png", "tiles/torch/1.png", "tiles/torch/2.png"},
+                                         .frameMs = 120}).value();
+
     for (int x = 0; x < map.width(); ++x) {
         CHECK(map.place({x, 11}, small).has_value());
     }
     CHECK(map.place({4, 2}, big).has_value());
     CHECK(map.place({10, 5}, decor).has_value());
+    CHECK(map.place({13, 5}, torch).has_value());
     CHECK(map.setSpawn({1, 10}));
     CHECK(map.addCheckpoint({15, 10}));
     CHECK(map.addCheckpoint({8, 10}));
@@ -107,7 +115,7 @@ struct Parts {
     int width = 8;
     int height = 6;
     std::string tiles =
-        R"([{"file":"a.png","pixelWidth":32,"pixelHeight":32,"solid":true,"sourceX":0,"sourceY":0}])";
+        R"([{"file":"a.png","pixelWidth":32,"pixelHeight":32,"solid":true,"sourceX":0,"sourceY":0,"frames":[],"frameMs":0}])";
     std::string placed = "[]";
     std::string checkpoints = "[]";
     std::string extra;  //anything added at the end, for example a spawn
@@ -131,11 +139,15 @@ static void testRoundTrip() {
     CHECK(sameMap(original, *loaded));
     CHECK(toJson(*loaded) == text);
 
-    //20 floor tiles + 1 big tile + 1 decor tile, the big tile is written once, not 16 times
-    CHECK(countOf(text, "\"tile\"") == 22);
+    //20 floor tiles + 1 big tile + 1 decor tile + 1 torch, the big tile is written once, not 16 times
+    CHECK(countOf(text, "\"tile\"") == 23);
 
     //the cut out tile keeps the place it starts in the image
     CHECK(loaded->tileDefs()[2].sourceX == 128 && loaded->tileDefs()[2].sourceY == 64);
+
+    //the animated tile keeps its frames and speed
+    const TileDef& torch = loaded->tileDefs()[3];
+    CHECK(torch.isAnimated() && torch.frames.size() == 3 && torch.frameMs == 120);
 }
 
 //a map with no tiles, no spawn and no checkpoints also survives
@@ -213,7 +225,15 @@ static void testHeaderErrors() {
 static void testFormatErrors() {
     //the tile has no "solid" field
     CHECK(failsWith(
-        fromJson(makeJson({.tiles = R"([{"file":"a.png","pixelWidth":32,"pixelHeight":32,"sourceX":0,"sourceY":0}])"})),
+        fromJson(makeJson({.tiles = R"([{"file":"a.png","pixelWidth":32,"pixelHeight":32,"sourceX":0,"sourceY":0,"frames":[],"frameMs":0}])"})),
+        IoError::InvalidFormat));
+
+    //"frames" is text instead of a list, and "frameMs" is missing
+    CHECK(failsWith(
+        fromJson(makeJson({.tiles = R"([{"file":"a.png","pixelWidth":32,"pixelHeight":32,"solid":true,"sourceX":0,"sourceY":0,"frames":"a.png","frameMs":0}])"})),
+        IoError::InvalidFormat));
+    CHECK(failsWith(
+        fromJson(makeJson({.tiles = R"([{"file":"a.png","pixelWidth":32,"pixelHeight":32,"solid":true,"sourceX":0,"sourceY":0,"frames":[]}])"})),
         IoError::InvalidFormat));
 
     //the width is text instead of a number
@@ -230,8 +250,17 @@ static void testFormatErrors() {
 //tile types with a bad size
 static void testTileErrors() {
     CHECK(failsWith(
-        fromJson(makeJson({.tiles = R"([{"file":"a.png","pixelWidth":0,"pixelHeight":32,"solid":true,"sourceX":0,"sourceY":0}])"})),
+        fromJson(makeJson({.tiles = R"([{"file":"a.png","pixelWidth":0,"pixelHeight":32,"solid":true,"sourceX":0,"sourceY":0,"frames":[],"frameMs":0}])"})),
         IoError::InvalidTile));
+}
+
+//a tile with frames loads as an animated tile
+static void testAnimatedTile() {
+    const auto loaded = fromJson(makeJson(
+        {.tiles = R"([{"file":"a/0.png","pixelWidth":32,"pixelHeight":32,"solid":false,"sourceX":0,"sourceY":0,"frames":["a/0.png","a/1.png"],"frameMs":80}])"}));
+    CHECK(loaded.has_value());
+    CHECK(loaded->tileDefs()[0].isAnimated());
+    CHECK(loaded->tileDefs()[0].frames.size() == 2 && loaded->tileDefs()[0].frameMs == 80);
 }
 
 //placed tiles that do not exist, overlap or do not fit
@@ -286,6 +315,7 @@ int main() {
     testHeaderErrors();
     testFormatErrors();
     testTileErrors();
+    testAnimatedTile();
     testPlacementErrors();
     testObjectErrors();
     testDescribe();

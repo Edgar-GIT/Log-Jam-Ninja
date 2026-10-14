@@ -84,8 +84,11 @@ void EditorApp::run() {
 }
 
 void EditorApp::update(float dt) {
+    //animated tiles follow the clock
+    m_palette.setTime(GetTime());
+
     //while a window or a question is open it takes all the input
-    const bool inputEnabled = !m_import.isOpen() && m_confirm == Confirm::None;
+    const bool inputEnabled = !m_import.isOpen() && !m_animImport.isOpen() && m_confirm == Confirm::None;
     const Vector2 view = viewSize();
 
     if (inputEnabled) {
@@ -181,7 +184,7 @@ void EditorApp::draw() {
     }
 
     //the side panel, locked while a window or a question is open so it ignores clicks
-    const bool modalOpen = m_import.isOpen() || m_confirm != Confirm::None;
+    const bool modalOpen = m_import.isOpen() || m_animImport.isOpen() || m_confirm != Confirm::None;
     if (modalOpen) {
         GuiLock();
     }
@@ -198,6 +201,9 @@ void EditorApp::draw() {
     //what the user clicked in the panel
     if (panel.loadTileClicked) {
         m_import.start();
+    }
+    if (panel.loadAnimatedClicked) {
+        m_animImport.start();
     }
     if (panel.openClicked) {
         requestOpen();
@@ -218,6 +224,9 @@ void EditorApp::draw() {
     //the import window goes on top of everything
     const Vector2 screen{static_cast<float>(GetScreenWidth()), static_cast<float>(GetScreenHeight())};
     if (const auto tile = m_import.draw(screen)) {
+        addTile(*tile);
+    }
+    if (const auto tile = m_animImport.draw(screen)) {
         addTile(*tile);
     }
 

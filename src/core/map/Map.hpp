@@ -42,6 +42,13 @@ struct TileDef {
     int sourceX{0};
     int sourceY{0};
 
+    //animated tiles: the image of every frame in play order and how long each one stays, empty and 0 for a still tile
+    std::vector<std::string> frames{};
+    int frameMs{0};
+
+    //true when the tile has at least two frames and a speed
+    [[nodiscard]] bool isAnimated() const noexcept { return frames.size() > 1 && frameMs > 0; }
+
     //how many cells the sprite covers horizontally (rounded up)
     [[nodiscard]] constexpr int cellsWide() const noexcept {
         return (pixelWidth + kCellSize - 1) / kCellSize;

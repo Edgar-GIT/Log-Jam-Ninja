@@ -3,6 +3,7 @@
 #include "Palette.hpp"
 
 #include <filesystem>
+#include "map/Animation.hpp"
 
 namespace ljn {
 namespace {
@@ -28,9 +29,20 @@ Palette::~Palette() {
 }
 
 void Palette::sync(const Map& map) {
+    //loads one image unless it is already loaded
+    const auto loadIfMissing = [this](const std::string& file) {
+        if (!m_textures.contains(file)) {
+            m_textures.emplace(file, loadTexture(file));
+        }
+    };
+
     for (const TileDef& def : map.tileDefs()) {
-        if (!m_textures.contains(def.file)) {
-            m_textures.emplace(def.file, loadTexture(def.file));
+        if (def.isAnimated()) {
+            for (const std::string& frame : def.frames) {
+                loadIfMissing(frame);
+            }
+        } else {
+            loadIfMissing(def.file);
         }
     }
 }
@@ -41,7 +53,7 @@ TileId Palette::find(const Map& map, const TileDef& def) {
         const TileDef& other = defs[i];
         if (other.file == def.file && other.sourceX == def.sourceX && other.sourceY == def.sourceY
             && other.pixelWidth == def.pixelWidth && other.pixelHeight == def.pixelHeight
-            && other.solid == def.solid) {
+            && other.solid == def.solid && other.frames == def.frames && other.frameMs == def.frameMs) {
             return static_cast<TileId>(i + 1);
         }
     }
@@ -49,7 +61,8 @@ TileId Palette::find(const Map& map, const TileDef& def) {
 }
 
 void Palette::draw(const TileDef& def, Rectangle dest, Color tint) const {
-    const auto it = m_textures.find(def.file);
+    //an animated tile shows the frame that belongs to the current time
+    const auto it = m_textures.find(currentFile(def, m_time));
     if (it == m_textures.end() || it->second.id == 0) {
         DrawRectangleRec(dest, MAGENTA);
         return;

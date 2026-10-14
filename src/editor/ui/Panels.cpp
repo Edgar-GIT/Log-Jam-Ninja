@@ -65,10 +65,11 @@ PanelResult SidePanel::draw(Rectangle area, const Map& map, Palette& palette, To
     const float bottom = area.y + area.height - kPad;
     float y = area.y + kPad;
 
-    //title and the button that opens the import window
+    //title and the two buttons that open the import windows: a still tile or an animated one
     GuiLabel({x, y, width, 28.0f}, "TILES");
     y += 34.0f;
-    result.loadTileClicked = button({x, y, width, 40.0f}, "Load tile...");
+    result.loadTileClicked = button({x, y, half, 40.0f}, "Load tile");
+    result.loadAnimatedClicked = button({x + half + kGap, y, half, 40.0f}, "Animated");
     y += 48.0f;
 
     //open and save, the star says there are unsaved changes
@@ -145,8 +146,13 @@ PanelResult SidePanel::draw(Rectangle area, const Map& map, Palette& palette, To
         GuiLabel({x, y, width, 24.0f}, std::format("#{} {}", palette.selected(), name).c_str());
         GuiLabel({x, y + 26.0f, width, 24.0f},
                  std::format("{}x{} px  {}", def.pixelWidth, def.pixelHeight, def.solid ? "solid" : "not solid").c_str());
-        GuiLabel({x, y + 52.0f, width, 24.0f},
-                 std::format("{}x{} cells  from ({}, {})", def.cellsWide(), def.cellsHigh(), def.sourceX, def.sourceY).c_str());
+        if (def.isAnimated()) {
+            GuiLabel({x, y + 52.0f, width, 24.0f},
+                     std::format("{} frames, {} ms each", def.frames.size(), def.frameMs).c_str());
+        } else {
+            GuiLabel({x, y + 52.0f, width, 24.0f},
+                     std::format("{}x{} cells  from ({}, {})", def.cellsWide(), def.cellsHigh(), def.sourceX, def.sourceY).c_str());
+        }
     } else {
         GuiLabel({x, y, width, 24.0f}, "No tile selected");
     }

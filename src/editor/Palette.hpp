@@ -18,11 +18,14 @@ public:
     Palette(const Palette&) = delete;
     Palette& operator=(const Palette&) = delete;
 
-    //loads the image of every tile type in the map that is not loaded yet
+    //loads the image of every tile type in the map that is not loaded yet (every frame of animated tiles)
     void sync(const Map& map);
 
     //id of the tile type that matches this definition exactly, or kEmptyTile if there is none
     [[nodiscard]] static TileId find(const Map& map, const TileDef& def);
+
+    //the time used to pick the frame of animated tiles, call it once per frame
+    void setTime(double seconds) noexcept { m_time = seconds; }
 
     //draws the part of the image that is the tile into a rectangle, a missing image becomes a magenta box
     void draw(const TileDef& def, Rectangle dest, Color tint) const;
@@ -35,6 +38,9 @@ private:
     //one texture per image file, shared by every tile cut from that file
     std::unordered_map<std::string, Texture2D> m_textures;
     TileId m_selected{kEmptyTile};
+
+    //seconds, decides which frame an animated tile shows
+    double m_time{0.0};
 };
 
 }  //namespace ljn

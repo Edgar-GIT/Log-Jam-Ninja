@@ -12,14 +12,16 @@
 
 namespace ljn {
 
-//a tile was placed: undo erases it
+//a tile was placed in a layer: undo erases it
 struct TilePlaced {
+    int layer;
     Cell origin;
     TileId id;
 };
 
-//a tile was erased: undo puts it back
+//a tile was erased from a layer: undo puts it back
 struct TileErased {
+    int layer;
     Cell origin;
     TileId id;
 };
@@ -40,8 +42,34 @@ struct CheckpointRemoved {
     Cell cell;
 };
 
+//a layer was added at the front: undo removes it
+struct LayerAdded {
+    int index;
+    Map::Layer layer;
+};
+
+//a layer was removed with all its tiles: undo puts it back where it was
+struct LayerRemoved {
+    int index;
+    Map::Layer layer;
+};
+
+//a layer moved from one position to another
+struct LayerMoved {
+    int from;
+    int to;
+};
+
+//the settings of a layer changed (name, parallax, solid, visible)
+struct LayerEdited {
+    int index;
+    LayerInfo before;
+    LayerInfo after;
+};
+
 //one small step of an edit, whatever kind it is
-using Change = std::variant<TilePlaced, TileErased, SpawnChanged, CheckpointAdded, CheckpointRemoved>;
+using Change = std::variant<TilePlaced, TileErased, SpawnChanged, CheckpointAdded, CheckpointRemoved,
+                            LayerAdded, LayerRemoved, LayerMoved, LayerEdited>;
 
 class History {
 public:
@@ -49,12 +77,18 @@ public:
     static constexpr std::size_t kMaxActions = 1000;
 
     //the edits: each one changes the map and remembers how to undo it, edits that fail are not remembered
-    std::expected<void, PlaceError> place(Map& map, Cell origin, TileId id);
-    std::optional<PlacedTile> erase(Map& map, Cell cell);
+    std::expected<void, PlaceError> place(Map& map, int layer, Cell origin, TileId id);
+    std::optional<PlacedTile> erase(Map& map, int layer, Cell cell);
     bool setSpawn(Map& map, Cell cell);
     bool clearSpawn(Map& map);
     bool addCheckpoint(Map& map, Cell cell);
     bool removeCheckpoint(Map& map, Cell cell);
+
+    //layer edits: each one is its own action (they close the group of edits before and after)
+    std::expected<int, MapError> addLayer(Map& map, LayerInfo info);
+    bool removeLayer(Map& map, int index);
+    bool moveLayer(Map& map, int from, int to);
+    bool editLayer(Map& map, int index, LayerInfo info);
 
     //closes the group of edits made since the last commit, so undo treats them as one action
     void commit();

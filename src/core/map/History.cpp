@@ -19,17 +19,17 @@ void setSpawnTo(Map& map, const std::optional<Cell>& spawn) {
 
 //doing a change again, and taking it back, one pair of functions per kind of change
 void redoChange(const TilePlaced& change, Map& map) {
-    static_cast<void>(map.place(change.origin, change.id));
+    static_cast<void>(map.place(change.layer, change.origin, change.id));
 }
 void undoChange(const TilePlaced& change, Map& map) {
-    static_cast<void>(map.erase(change.origin));
+    static_cast<void>(map.erase(change.layer, change.origin));
 }
 
 void redoChange(const TileErased& change, Map& map) {
-    static_cast<void>(map.erase(change.origin));
+    static_cast<void>(map.erase(change.layer, change.origin));
 }
 void undoChange(const TileErased& change, Map& map) {
-    static_cast<void>(map.place(change.origin, change.id));
+    static_cast<void>(map.place(change.layer, change.origin, change.id));
 }
 
 void redoChange(const SpawnChanged& change, Map& map) {
@@ -53,20 +53,49 @@ void undoChange(const CheckpointRemoved& change, Map& map) {
     static_cast<void>(map.addCheckpoint(change.cell));
 }
 
+void redoChange(const LayerAdded& change, Map& map) {
+    static_cast<void>(map.insertLayer(change.index, change.layer));
+}
+void undoChange(const LayerAdded& change, Map& map) {
+    static_cast<void>(map.removeLayer(change.index));
+}
+
+void redoChange(const LayerRemoved& change, Map& map) {
+    static_cast<void>(map.removeLayer(change.index));
+}
+void undoChange(const LayerRemoved& change, Map& map) {
+    static_cast<void>(map.insertLayer(change.index, change.layer));
+}
+
+//moving from a to b is undone by moving from b to a
+void redoChange(const LayerMoved& change, Map& map) {
+    static_cast<void>(map.moveLayer(change.from, change.to));
+}
+void undoChange(const LayerMoved& change, Map& map) {
+    static_cast<void>(map.moveLayer(change.to, change.from));
+}
+
+void redoChange(const LayerEdited& change, Map& map) {
+    static_cast<void>(map.setLayerInfo(change.index, change.after));
+}
+void undoChange(const LayerEdited& change, Map& map) {
+    static_cast<void>(map.setLayerInfo(change.index, change.before));
+}
+
 }  //anonymous namespace
 
-std::expected<void, PlaceError> History::place(Map& map, Cell origin, TileId id) {
-    const auto result = map.place(origin, id);
+std::expected<void, PlaceError> History::place(Map& map, int layer, Cell origin, TileId id) {
+    const auto result = map.place(layer, origin, id);
     if (result) {
-        record(TilePlaced{origin, id});
+        record(TilePlaced{layer, origin, id});
     }
     return result;
 }
 
-std::optional<PlacedTile> History::erase(Map& map, Cell cell) {
-    const auto removed = map.erase(cell);
+std::optional<PlacedTile> History::erase(Map& map, int layer, Cell cell) {
+    const auto removed = map.erase(layer, cell);
     if (removed) {
-        record(TileErased{removed->origin, removed->id});
+        record(TileErased{layer, removed->origin, removed->id});
     }
     return removed;
 }
@@ -102,6 +131,65 @@ bool History::removeCheckpoint(Map& map, Cell cell) {
         return false;
     }
     record(CheckpointRemoved{cell});
+    return true;
+}
+
+std::expected<int, MapError> History::addLayer(Map& map, LayerInfo info) {
+    commit();
+    const auto index = map.addLayer(std::move(info));
+    if (!index) {
+        return index;
+    }
+
+    //the layer is copied so undo can remove it and redo can bring it back
+    record(LayerAdded{*index, map.layerAt(*index)});
+    commit();
+    return index;
+}
+
+bool History::removeLayer(Map& map, int index) {
+    commit();
+
+    //a map always keeps at least one layer
+    if (map.layerCount() <= 1) {
+        return false;
+    }
+    auto removed = map.removeLayer(index);
+    if (!removed) {
+        return false;
+    }
+    record(LayerRemoved{index, std::move(*removed)});
+    commit();
+    return true;
+}
+
+bool History::moveLayer(Map& map, int from, int to) {
+    commit();
+    if (from == to || !map.moveLayer(from, to)) {
+        return false;
+    }
+    record(LayerMoved{from, to});
+    commit();
+    return true;
+}
+
+bool History::editLayer(Map& map, int index, LayerInfo info) {
+    commit();
+    if (!map.hasLayer(index)) {
+        return false;
+    }
+    LayerInfo before = map.layerInfo(index);
+    if (!map.setLayerInfo(index, info)) {
+        return false;
+    }
+
+    //nothing to remember when nothing changed
+    if (before.name == info.name && before.parallaxX == info.parallaxX && before.parallaxY == info.parallaxY
+        && before.solid == info.solid && before.visible == info.visible) {
+        return false;
+    }
+    record(LayerEdited{index, std::move(before), std::move(info)});
+    commit();
     return true;
 }
 

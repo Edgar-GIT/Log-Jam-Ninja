@@ -62,6 +62,10 @@ private:
     //undo and redo, the map check, saving and opening
     void undo();
     void redo();
+
+    //keeps the active layer inside the map, and applies what the layers tab asked for
+    void clampLayer();
+    void applyLayerActions(const PanelResult& panel);
     void runValidation();
     void checkMap();
     void goToProblem();

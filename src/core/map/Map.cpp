@@ -13,33 +13,97 @@ std::expected<Map, MapError> Map::create(int width, int height) {
     return Map{width, height};
 }
 
-Map::Map(int width, int height): m_width{width},m_height{height},m_slots(static_cast<std::size_t>(width) * static_cast<std::size_t>(height)) {}
+Map::Map(int width, int height): m_width{width}, m_height{height} {}
 
-TileId Map::tile(Cell c) const noexcept {
-    return inBounds(c) ? m_slots[index(c)].id : kEmptyTile;
+const LayerInfo& Map::layerInfo(int layer) const noexcept {
+    return m_layers[static_cast<std::size_t>(layer)].info;
 }
 
-Cell Map::originOf(Cell c) const noexcept {
-    if (!inBounds(c)) {
+const Map::Layer& Map::layerAt(int layer) const noexcept {
+    return m_layers[static_cast<std::size_t>(layer)];
+}
+
+bool Map::isValidLayer(const Layer& layer) const noexcept {
+    const std::size_t cells = static_cast<std::size_t>(m_width) * static_cast<std::size_t>(m_height);
+    return layer.slots.size() == cells && !layer.info.name.empty() && layer.info.name.size() <= kMaxLayerName;
+}
+
+std::expected<int, MapError> Map::addLayer(LayerInfo info) {
+    const int index = layerCount();
+    const auto cells = static_cast<std::size_t>(m_width) * static_cast<std::size_t>(m_height);
+    if (const auto done = insertLayer(index, Layer{std::move(info), std::vector<Slot>(cells)}); !done) {
+        return std::unexpected(done.error());
+    }
+    return index;
+}
+
+std::expected<void, MapError> Map::insertLayer(int index, Layer layer) {
+    if (layerCount() >= kMaxLayers) {
+        return std::unexpected(MapError::TooManyLayers);
+    }
+    if (index < 0 || index > layerCount() || !isValidLayer(layer)) {
+        return std::unexpected(MapError::InvalidLayer);
+    }
+    m_layers.insert(m_layers.begin() + index, std::move(layer));
+    return {};
+}
+
+std::optional<Map::Layer> Map::removeLayer(int index) {
+    if (!hasLayer(index)) {
+        return std::nullopt;
+    }
+    Layer removed = std::move(m_layers[static_cast<std::size_t>(index)]);
+    m_layers.erase(m_layers.begin() + index);
+    return removed;
+}
+
+bool Map::moveLayer(int from, int to) {
+    if (!hasLayer(from) || !hasLayer(to)) {
+        return false;
+    }
+
+    //rotate shifts everything between the two positions by one
+    if (from < to) {
+        std::rotate(m_layers.begin() + from, m_layers.begin() + from + 1, m_layers.begin() + to + 1);
+    } else if (to < from) {
+        std::rotate(m_layers.begin() + to, m_layers.begin() + from, m_layers.begin() + from + 1);
+    }
+    return true;
+}
+
+bool Map::setLayerInfo(int layer, LayerInfo info) {
+    if (!hasLayer(layer) || info.name.empty() || info.name.size() > kMaxLayerName) {
+        return false;
+    }
+    m_layers[static_cast<std::size_t>(layer)].info = std::move(info);
+    return true;
+}
+
+TileId Map::tile(int layer, Cell c) const noexcept {
+    return (hasLayer(layer) && inBounds(c)) ? layerAt(layer).slots[index(c)].id : kEmptyTile;
+}
+
+Cell Map::originOf(int layer, Cell c) const noexcept {
+    if (!hasLayer(layer) || !inBounds(c)) {
         return c;
     }
-    const Slot& slot = m_slots[index(c)];
+    const Slot& slot = layerAt(layer).slots[index(c)];
     return {c.x - slot.dx, c.y - slot.dy};
 }
 
-bool Map::isFree(Cell c) const noexcept {
-    return inBounds(c) && m_slots[index(c)].id == kEmptyTile;
+bool Map::isFree(int layer, Cell c) const noexcept {
+    return hasLayer(layer) && inBounds(c) && layerAt(layer).slots[index(c)].id == kEmptyTile;
 }
 
-bool Map::canPlace(Cell origin, TileId id) const noexcept {
+bool Map::canPlace(int layer, Cell origin, TileId id) const noexcept {
     if (!hasTile(id)) {
         return false;
     }
-    const TileDef& def = m_defs[static_cast<std::size_t>(id) - 1];
+    const TileDef& tileDef = def(id);
 
-    for (int dy = 0; dy < def.cellsHigh(); ++dy) {
-        for (int dx = 0; dx < def.cellsWide(); ++dx) {
-            if (!isFree({origin.x + dx, origin.y + dy})) {
+    for (int dy = 0; dy < tileDef.cellsHigh(); ++dy) {
+        for (int dx = 0; dx < tileDef.cellsWide(); ++dx) {
+            if (!isFree(layer, {origin.x + dx, origin.y + dy})) {
                 return false;
             }
         }
@@ -47,7 +111,10 @@ bool Map::canPlace(Cell origin, TileId id) const noexcept {
     return true;
 }
 
-std::expected<void, PlaceError> Map::place(Cell origin, TileId id) {
+std::expected<void, PlaceError> Map::place(int layer, Cell origin, TileId id) {
+    if (!hasLayer(layer)) {
+        return std::unexpected(PlaceError::UnknownLayer);
+    }
     if (!hasTile(id)) {
         return std::unexpected(PlaceError::UnknownTile);
     }
@@ -55,18 +122,19 @@ std::expected<void, PlaceError> Map::place(Cell origin, TileId id) {
         return std::unexpected(PlaceError::OutOfBounds);
     }
 
-    const TileDef& def = m_defs[static_cast<std::size_t>(id) - 1];
-    const int wide = def.cellsWide();
-    const int high = def.cellsHigh();
+    const TileDef& tileDef = def(id);
+    const int wide = tileDef.cellsWide();
+    const int high = tileDef.cellsHigh();
 
     const Cell last{origin.x + wide - 1, origin.y + high - 1};
     if (!inBounds(last)) {
         return std::unexpected(PlaceError::OutOfBounds);
     }
 
+    std::vector<Slot>& slots = m_layers[static_cast<std::size_t>(layer)].slots;
     for (int dy = 0; dy < high; ++dy) {
         for (int dx = 0; dx < wide; ++dx) {
-            if (m_slots[index({origin.x + dx, origin.y + dy})].id != kEmptyTile) {
+            if (slots[index({origin.x + dx, origin.y + dy})].id != kEmptyTile) {
                 return std::unexpected(PlaceError::Overlap);
             }
         }
@@ -74,35 +142,50 @@ std::expected<void, PlaceError> Map::place(Cell origin, TileId id) {
 
     for (int dy = 0; dy < high; ++dy) {
         for (int dx = 0; dx < wide; ++dx) {
-            m_slots[index({origin.x + dx, origin.y + dy})] =
+            slots[index({origin.x + dx, origin.y + dy})] =
                 Slot{id, static_cast<std::uint8_t>(dx), static_cast<std::uint8_t>(dy)};
         }
     }
     return {};
 }
 
-std::optional<PlacedTile> Map::erase(Cell c) {
-    if (!inBounds(c)) {
+std::optional<PlacedTile> Map::erase(int layer, Cell c) {
+    if (!hasLayer(layer) || !inBounds(c)) {
         return std::nullopt;
     }
-    const TileId id = m_slots[index(c)].id;
+    std::vector<Slot>& slots = m_layers[static_cast<std::size_t>(layer)].slots;
+    const TileId id = slots[index(c)].id;
     if (id == kEmptyTile) {
         return std::nullopt;
     }
 
-    const Cell origin = originOf(c);
-    const TileDef& def = m_defs[static_cast<std::size_t>(id) - 1];
+    const Cell origin = originOf(layer, c);
+    const TileDef& tileDef = def(id);
 
-    for (int dy = 0; dy < def.cellsHigh(); ++dy) {
-        for (int dx = 0; dx < def.cellsWide(); ++dx) {
-            m_slots[index({origin.x + dx, origin.y + dy})] = Slot{};
+    for (int dy = 0; dy < tileDef.cellsHigh(); ++dy) {
+        for (int dx = 0; dx < tileDef.cellsWide(); ++dx) {
+            slots[index({origin.x + dx, origin.y + dy})] = Slot{};
         }
     }
     return PlacedTile{origin, id};
 }
 
 bool Map::isSolid(Cell c) const noexcept {
-    return m_solidLut[tile(c)] != 0;
+    for (int layer = 0; layer < layerCount(); ++layer) {
+        if (layerInfo(layer).solid && m_solidLut[tile(layer, c)] != 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Map::hasAnyTile(Cell c) const noexcept {
+    for (int layer = 0; layer < layerCount(); ++layer) {
+        if (tile(layer, c) != kEmptyTile) {
+            return true;
+        }
+    }
+    return false;
 }
 
 std::expected<TileId, MapError> Map::addTileDef(TileDef def) {

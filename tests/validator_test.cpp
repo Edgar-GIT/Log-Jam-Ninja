@@ -7,9 +7,11 @@
 
 using namespace ljn;
 
-//builds an empty map for a test
+//builds an empty map for a test, with one solid layer
 static Map makeMap(int width = 16, int height = 10) {
-    return Map::create(width, height).value();
+    Map map = Map::create(width, height).value();
+    CHECK(map.addLayer({.name = "Ground", .solid = true}).has_value());
+    return map;
 }
 
 //adds a tile type with the given pixel size and returns its id
@@ -25,7 +27,7 @@ static TileId addTile(Map& map, int pixelWidth, int pixelHeight, bool solid = tr
 static void fillFloor(Map& map, TileId id, int skipX = -1) {
     for (int x = 0; x < map.width(); ++x) {
         if (x != skipX) {
-            CHECK(map.place({x, map.height() - 1}, id).has_value());
+            CHECK(map.place(0, {x, map.height() - 1}, id).has_value());
         }
     }
 }
@@ -63,17 +65,17 @@ static void testStrayTiles() {
     CHECK(map.setSpawn({2, 8}));
 
     //one loose cell
-    CHECK(map.place({5, 4}, ground).has_value());
+    CHECK(map.place(0, {5, 4}, ground).has_value());
     CHECK(validate(map).count(IssueCode::StrayTiles) == 1);
-    CHECK(map.erase({5, 4}).has_value());
+    CHECK(map.erase(0, {5, 4}).has_value());
 
     //a tile with 2 cells
-    CHECK(map.place({5, 4}, wide2).has_value());
+    CHECK(map.place(0, {5, 4}, wide2).has_value());
     CHECK(validate(map).count(IssueCode::StrayTiles) == 2);
-    CHECK(map.erase({5, 4}).has_value());
+    CHECK(map.erase(0, {5, 4}).has_value());
 
     //a platform with 3 cells is fine
-    CHECK(map.place({5, 4}, wide3).has_value());
+    CHECK(map.place(0, {5, 4}, wide3).has_value());
     CHECK(validate(map).count(IssueCode::StrayTiles) == 0);
 }
 
@@ -83,7 +85,7 @@ static void testBlockOnFloor() {
     const TileId ground = addTile(map, 32, 32);
     fillFloor(map, ground);
     CHECK(map.setSpawn({2, 8}));
-    CHECK(map.place({5, 8}, ground).has_value());
+    CHECK(map.place(0, {5, 8}, ground).has_value());
 
     CHECK(validate(map).count(IssueCode::StrayTiles) == 0);
 }
@@ -96,7 +98,7 @@ static void testBigTileAndRules() {
     const TileId big = addTile(map, 128, 128);
     fillFloor(map, ground);
     CHECK(map.setSpawn({2, 8}));
-    CHECK(map.place({4, 2}, big).has_value());
+    CHECK(map.place(0, {4, 2}, big).has_value());
 
     //16 cells is enough with the default minimum of 3
     CHECK(validate(map).count(IssueCode::StrayTiles) == 0);
@@ -131,7 +133,7 @@ static void testSpawnOverPit() {
 
     //floor only on the left half of the map
     for (int x = 0; x < 8; ++x) {
-        CHECK(map.place({x, 9}, ground).has_value());
+        CHECK(map.place(0, {x, 9}, ground).has_value());
     }
     CHECK(map.setSpawn({10, 5}));
 
@@ -161,7 +163,7 @@ static void testCheckpointNoGround() {
 
     //column 10 only has a non solid tile, so it is not empty but has no ground
     fillFloor(map, ground, 10);
-    CHECK(map.place({10, 9}, decor).has_value());
+    CHECK(map.place(0, {10, 9}, decor).has_value());
     CHECK(map.setSpawn({2, 8}));
     CHECK(map.addCheckpoint({10, 5}));
 
@@ -181,7 +183,7 @@ static void testDetailsAreNotStray() {
     CHECK(map.setSpawn({2, 8}));
 
     //a detail floating in the air, nothing around it
-    CHECK(map.place({5, 3}, detail).has_value());
+    CHECK(map.place(0, {5, 3}, detail).has_value());
     CHECK(validate(map).count(IssueCode::StrayTiles) == 0);
     CHECK(validate(map).issues.empty());
 }
@@ -194,6 +196,28 @@ static void testDescribe() {
 }
 
 //runs every test, any failed CHECK ends the program with exit code 1
+//a column filled in any layer is not empty, and a tile on a layer that is not solid is not stray
+static void testLayers() {
+    Map map = makeMap(16, 10);
+    CHECK(map.addLayer({.name = "Sky", .parallaxX = 0.5f}).has_value());
+    const TileId ground = addTile(map, 32, 32);
+    const TileId cloud = addTile(map, 32, 32, true);
+
+    //the floor is in the solid layer except column 4, which only has a tile in the sky layer
+    fillFloor(map, ground, 4);
+    CHECK(validate(map).count(IssueCode::EmptyColumn) == 1);
+    CHECK(map.place(1, {4, 2}, cloud).has_value());
+    CHECK(validate(map).count(IssueCode::EmptyColumn) == 0);
+
+    //the lonely tile in the sky layer is not a stray solid group, because that layer is not solid
+    CHECK(map.setSpawn({2, 8}));
+    CHECK(validate(map).count(IssueCode::StrayTiles) == 0);
+
+    //if the sky layer becomes solid the same tile is stray
+    CHECK(map.setLayerInfo(1, {.name = "Sky", .solid = true}));
+    CHECK(validate(map).count(IssueCode::StrayTiles) == 1);
+}
+
 int main() {
     testEmptyMap();
     testValidMap();
@@ -205,6 +229,7 @@ int main() {
     testSpawnOverPit();
     testCheckpointInsideSolid();
     testCheckpointNoGround();
+    testLayers();
     testDescribe();
     std::println("all validator tests passed");
 }

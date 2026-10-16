@@ -14,7 +14,9 @@ using namespace ljn;
 
 //builds an empty map for a test
 static Map makeMap(int width = 20, int height = 12) {
-    return Map::create(width, height).value();
+    Map map = Map::create(width, height).value();
+    CHECK(map.addLayer({.name = "Ground", .solid = true}).has_value());
+    return map;
 }
 
 //adds a tile type with the given pixel size and returns its id
@@ -47,14 +49,26 @@ static bool sameMap(const Map& a, const Map& b) {
         }
     }
 
-    //every cell, including the offsets of big tiles
-    const auto ga = a.grid();
-    const auto gb = b.grid();
-    for (std::size_t y = 0; y < ga.extent(0); ++y) {
-        for (std::size_t x = 0; x < ga.extent(1); ++x) {
-            if (ga[y, x].id != gb[y, x].id || ga[y, x].dx != gb[y, x].dx
-                || ga[y, x].dy != gb[y, x].dy) {
-                return false;
+    //every layer: settings and every cell, including the offsets of big tiles
+    if (a.layerCount() != b.layerCount()) {
+        return false;
+    }
+    for (int layer = 0; layer < a.layerCount(); ++layer) {
+        const LayerInfo& ia = a.layerInfo(layer);
+        const LayerInfo& ib = b.layerInfo(layer);
+        if (ia.name != ib.name || ia.parallaxX != ib.parallaxX || ia.parallaxY != ib.parallaxY
+            || ia.solid != ib.solid || ia.visible != ib.visible) {
+            return false;
+        }
+
+        const auto ga = a.grid(layer);
+        const auto gb = b.grid(layer);
+        for (std::size_t y = 0; y < ga.extent(0); ++y) {
+            for (std::size_t x = 0; x < ga.extent(1); ++x) {
+                if (ga[y, x].id != gb[y, x].id || ga[y, x].dx != gb[y, x].dx
+                    || ga[y, x].dy != gb[y, x].dy) {
+                    return false;
+                }
             }
         }
     }
@@ -97,11 +111,19 @@ static Map makeFullMap() {
                                          .frameMs = 120}).value();
 
     for (int x = 0; x < map.width(); ++x) {
-        CHECK(map.place({x, 11}, small).has_value());
+        CHECK(map.place(0, {x, 11}, small).has_value());
     }
-    CHECK(map.place({4, 2}, big).has_value());
-    CHECK(map.place({10, 5}, decor).has_value());
-    CHECK(map.place({13, 5}, torch).has_value());
+    CHECK(map.place(0, {4, 2}, big).has_value());
+    CHECK(map.place(0, {10, 5}, decor).has_value());
+    CHECK(map.place(0, {13, 5}, torch).has_value());
+
+    //a background layer with parallax, a hidden front layer, and a tile in each
+    const auto back = map.addLayer({.name = "Mountains", .parallaxX = 0.25f, .parallaxY = 0.5f});
+    const auto front = map.addLayer({.name = "Fog", .parallaxX = 1.5f, .visible = false});
+    CHECK(back.has_value() && front.has_value());
+    CHECK(map.place(*back, {6, 6}, decor).has_value());
+    CHECK(map.place(*front, {7, 7}, small).has_value());
+
     CHECK(map.setSpawn({1, 10}));
     CHECK(map.addCheckpoint({15, 10}));
     CHECK(map.addCheckpoint({8, 10}));
@@ -116,16 +138,20 @@ struct Parts {
     int height = 6;
     std::string tiles =
         R"([{"file":"a.png","pixelWidth":32,"pixelHeight":32,"solid":true,"sourceX":0,"sourceY":0,"frames":[],"frameMs":0}])";
-    std::string placed = "[]";
+    std::string placed = "[]";    //the placed tiles of the only layer
+    std::string layers{};         //the whole layer list, when empty one solid layer with "placed" is used
     std::string checkpoints = "[]";
-    std::string extra;  //anything added at the end, for example a spawn
+    std::string extra{};  //anything added at the end, for example a spawn
 };
 
 //glues the pieces into json text
 static std::string makeJson(const Parts& p) {
+    const std::string layers = p.layers.empty()
+        ? R"([{"name":"Ground","parallaxX":1.0,"parallaxY":1.0,"solid":true,"visible":true,"placed":)" + p.placed + "}]"
+        : p.layers;
     return "{\"version\":" + std::to_string(p.version) + ",\"cellSize\":" + std::to_string(p.cellSize)
          + ",\"width\":" + std::to_string(p.width) + ",\"height\":" + std::to_string(p.height)
-         + ",\"tiles\":" + p.tiles + ",\"placed\":" + p.placed
+         + ",\"tiles\":" + p.tiles + ",\"layers\":" + layers
          + ",\"checkpoints\":" + p.checkpoints + p.extra + "}";
 }
 
@@ -139,8 +165,14 @@ static void testRoundTrip() {
     CHECK(sameMap(original, *loaded));
     CHECK(toJson(*loaded) == text);
 
-    //20 floor tiles + 1 big tile + 1 decor tile + 1 torch, the big tile is written once, not 16 times
-    CHECK(countOf(text, "\"tile\"") == 23);
+    //20 floor tiles + 1 big tile + 1 decor tile + 1 torch + 2 tiles in the other layers, the big tile is written once, not 16 times
+    CHECK(countOf(text, "\"tile\"") == 25);
+    CHECK(countOf(text, "\"parallaxX\"") == 3);
+
+    //the settings of the extra layers survive
+    CHECK(loaded->layerCount() == 3);
+    CHECK(loaded->layerInfo(1).name == "Mountains" && loaded->layerInfo(1).parallaxX == 0.25f);
+    CHECK(loaded->layerInfo(2).name == "Fog" && !loaded->layerInfo(2).visible && loaded->layerInfo(2).parallaxX == 1.5f);
 
     //the cut out tile keeps the place it starts in the image
     CHECK(loaded->tileDefs()[2].sourceX == 128 && loaded->tileDefs()[2].sourceY == 64);
@@ -215,7 +247,7 @@ static void testBaseFileIsValid() {
 
 //wrong version, wrong cell size, bad map size
 static void testHeaderErrors() {
-    CHECK(failsWith(fromJson(makeJson({.version = 2})), IoError::UnsupportedVersion));
+    CHECK(failsWith(fromJson(makeJson({.version = 1})), IoError::UnsupportedVersion));
     CHECK(failsWith(fromJson(makeJson({.cellSize = 64})), IoError::CellSizeMismatch));
     CHECK(failsWith(fromJson(makeJson({.width = 0})), IoError::InvalidMap));
     CHECK(failsWith(fromJson(makeJson({.height = -3})), IoError::InvalidMap));
@@ -238,13 +270,19 @@ static void testFormatErrors() {
 
     //the width is text instead of a number
     const std::string wrongType =
-        R"({"version":1,"cellSize":32,"width":"8","height":6,"tiles":[],"placed":[],"checkpoints":[]})";
+        R"({"version":2,"cellSize":32,"width":"8","height":6,"tiles":[],"layers":[],"checkpoints":[]})";
     CHECK(failsWith(fromJson(wrongType), IoError::InvalidFormat));
 
-    //the "placed" list is missing
-    const std::string noPlaced =
-        R"({"version":1,"cellSize":32,"width":8,"height":6,"tiles":[],"checkpoints":[]})";
-    CHECK(failsWith(fromJson(noPlaced), IoError::InvalidFormat));
+    //the "layers" list is missing
+    const std::string noLayers =
+        R"({"version":2,"cellSize":32,"width":8,"height":6,"tiles":[],"checkpoints":[]})";
+    CHECK(failsWith(fromJson(noLayers), IoError::InvalidFormat));
+
+    //a layer without its "placed" list, and a layer without a "name"
+    CHECK(failsWith(fromJson(makeJson({.layers = R"([{"name":"A","parallaxX":1.0,"parallaxY":1.0,"solid":true,"visible":true}])"})),
+                    IoError::InvalidFormat));
+    CHECK(failsWith(fromJson(makeJson({.layers = R"([{"parallaxX":1.0,"parallaxY":1.0,"solid":true,"visible":true,"placed":[]}])"})),
+                    IoError::InvalidFormat));
 }
 
 //tile types with a bad size
@@ -297,9 +335,44 @@ static void testObjectErrors() {
     CHECK(loaded->checkpoints().size() == 2);
 }
 
+//layers with bad settings, too many layers and no layers at all
+static void testLayerErrors() {
+    CHECK(failsWith(fromJson(makeJson({.layers = "[]"})), IoError::InvalidLayer));
+    CHECK(failsWith(fromJson(makeJson({.layers = R"([{"name":"","parallaxX":1.0,"parallaxY":1.0,"solid":true,"visible":true,"placed":[]}])"})),
+                    IoError::InvalidLayer));
+
+    //a name that is too long
+    const std::string longName(Map::kMaxLayerName + 1, 'a');
+    CHECK(failsWith(fromJson(makeJson({.layers = R"([{"name":")" + longName + R"(","parallaxX":1.0,"parallaxY":1.0,"solid":true,"visible":true,"placed":[]}])"})),
+                    IoError::InvalidLayer));
+
+    //more layers than the limit
+    std::string many = "[";
+    for (int i = 0; i <= Map::kMaxLayers; ++i) {
+        many += std::string(i == 0 ? "" : ",")
+              + R"({"name":"L","parallaxX":1.0,"parallaxY":1.0,"solid":false,"visible":true,"placed":[]})";
+    }
+    many += "]";
+    CHECK(failsWith(fromJson(makeJson({.layers = many})), IoError::InvalidLayer));
+
+    //two layers is fine, and the same tile can be in the same cell of both
+    const std::string two =
+        R"([{"name":"A","parallaxX":0.5,"parallaxY":1.0,"solid":false,"visible":true,"placed":[{"tile":1,"x":1,"y":1}]},)"
+        R"({"name":"B","parallaxX":1.0,"parallaxY":1.0,"solid":true,"visible":true,"placed":[{"tile":1,"x":1,"y":1}]}])";
+    const auto loaded = fromJson(makeJson({.layers = two}));
+    CHECK(loaded.has_value() && loaded->layerCount() == 2);
+    CHECK(loaded->tile(0, {1, 1}) == 1 && loaded->tile(1, {1, 1}) == 1);
+    CHECK(loaded->isSolid({1, 1}));
+
+    //a tile that overlaps inside one layer is still refused
+    const std::string overlap =
+        R"([{"name":"A","parallaxX":1.0,"parallaxY":1.0,"solid":false,"visible":true,"placed":[{"tile":1,"x":1,"y":1},{"tile":1,"x":1,"y":1}]}])";
+    CHECK(failsWith(fromJson(makeJson({.layers = overlap})), IoError::InvalidPlacement));
+}
+
 //every error code has a text for the editor
 static void testDescribe() {
-    for (int i = 0; i <= static_cast<int>(IoError::InvalidObject); ++i) {
+    for (int i = 0; i <= static_cast<int>(IoError::InvalidLayer); ++i) {
         CHECK(!describe(static_cast<IoError>(i)).empty());
     }
 }
@@ -318,6 +391,7 @@ int main() {
     testAnimatedTile();
     testPlacementErrors();
     testObjectErrors();
+    testLayerErrors();
     testDescribe();
     std::println("all serializer tests passed");
 }

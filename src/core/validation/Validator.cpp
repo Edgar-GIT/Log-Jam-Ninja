@@ -10,16 +10,18 @@ namespace {
 //the four cells next to a cell: right, left, down, up
 constexpr std::array<Cell, 4> kNeighbours{{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}};
 
-//a column with no tile at all leaves a black strip, so it is an error
+//a column with no tile in any layer leaves a black strip, so it is an error
 void checkEmptyColumns(const Map& map, ValidationReport& report) {
-    const auto grid = map.grid();
-    std::vector<std::uint8_t> filled(grid.extent(1), 0);
+    std::vector<std::uint8_t> filled(static_cast<std::size_t>(map.width()), 0);
 
-    //mark every column that has at least one tile
-    for (std::size_t y = 0; y < grid.extent(0); ++y) {
-        for (std::size_t x = 0; x < grid.extent(1); ++x) {
-            if (grid[y, x].id != kEmptyTile) {
-                filled[x] = 1;
+    //mark every column that has at least one tile in some layer
+    for (int layer = 0; layer < map.layerCount(); ++layer) {
+        const auto grid = map.grid(layer);
+        for (std::size_t y = 0; y < grid.extent(0); ++y) {
+            for (std::size_t x = 0; x < grid.extent(1); ++x) {
+                if (grid[y, x].id != kEmptyTile) {
+                    filled[x] = 1;
+                }
             }
         }
     }

@@ -1,14 +1,17 @@
 // map_test.cpp - checks that Map creates, places, erases and looks up tiles correctly.
 
 #include <print>
+#include <string>
 #include "check.hpp"
 #include "map/Map.hpp"
 
 using namespace ljn;
 
-//creates an empty fake map
+//creates a fake map with one solid layer (index 0)
 static Map makeMap(int width = 16, int height = 10) {
-    return Map::create(width, height).value();
+    Map map = Map::create(width, height).value();
+    CHECK(map.addLayer({.name = "Ground", .solid = true}).has_value());
+    return map;
 }
 
 //adds a tile type with the given pixel size and returns its ID
@@ -59,17 +62,17 @@ static void testSingleTile() {
     Map map = makeMap();
     const TileId id = addTile(map, 32, 32);
 
-    CHECK(map.isFree({3, 4}));
-    CHECK(map.place({3, 4}, id).has_value());
-    CHECK(map.tile({3, 4}) == id);
-    CHECK(!map.isFree({3, 4}));
-    CHECK(map.isFree({4, 4}));
+    CHECK(map.isFree(0, {3, 4}));
+    CHECK(map.place(0, {3, 4}, id).has_value());
+    CHECK(map.tile(0, {3, 4}) == id);
+    CHECK(!map.isFree(0, {3, 4}));
+    CHECK(map.isFree(0, {4, 4}));
 
-    const auto erased = map.erase({3, 4});
+    const auto erased = map.erase(0, {3, 4});
     CHECK(erased.has_value());
     CHECK(erased->origin == Cell{3, 4} && erased->id == id);
-    CHECK(map.isFree({3, 4}));
-    CHECK(!map.erase({3, 4}).has_value());
+    CHECK(map.isFree(0, {3, 4}));
+    CHECK(!map.erase(0, {3, 4}).has_value());
 }
 
 //a 128x128 tile covers 4x4 cells and is erased as a whole
@@ -77,23 +80,23 @@ static void testBigTile() {
     Map map = makeMap();
     const TileId id = addTile(map, 128, 128);
 
-    CHECK(map.place({2, 3}, id).has_value());
+    CHECK(map.place(0, {2, 3}, id).has_value());
     for (int y = 3; y < 7; ++y) {
         for (int x = 2; x < 6; ++x) {
-            CHECK(map.tile({x, y}) == id);
+            CHECK(map.tile(0, {x, y}) == id);
         }
     }
-    CHECK(map.isFree({6, 3}));
-    CHECK(map.isFree({2, 7}));
-    CHECK(map.originOf({5, 6}) == Cell{2, 3});
-    CHECK(map.originOf({2, 3}) == Cell{2, 3});
+    CHECK(map.isFree(0, {6, 3}));
+    CHECK(map.isFree(0, {2, 7}));
+    CHECK(map.originOf(0, {5, 6}) == Cell{2, 3});
+    CHECK(map.originOf(0, {2, 3}) == Cell{2, 3});
 
     //erasing from the middle of the tile removes the whole tile
-    const auto erased = map.erase({4, 5});
+    const auto erased = map.erase(0, {4, 5});
     CHECK(erased.has_value() && erased->origin == Cell{2, 3} && erased->id == id);
     for (int y = 3; y < 7; ++y) {
         for (int x = 2; x < 6; ++x) {
-            CHECK(map.isFree({x, y}));
+            CHECK(map.isFree(0, {x, y}));
         }
     }
 }
@@ -105,24 +108,24 @@ static void testPlaceErrors() {
     const TileId tileBig = addTile(map, 128, 128);
 
     //IDs that are not in the palette
-    CHECK(failsWith(map.place({0, 0}, 0), PlaceError::UnknownTile));
-    CHECK(failsWith(map.place({0, 0}, 99), PlaceError::UnknownTile));
+    CHECK(failsWith(map.place(0, {0, 0}, 0), PlaceError::UnknownTile));
+    CHECK(failsWith(map.place(0, {0, 0}, 99), PlaceError::UnknownTile));
 
     //outside the map: negative origin, past the right edge, past the bottom edge
-    CHECK(failsWith(map.place({-1, 0}, tileSmall), PlaceError::OutOfBounds));
-    CHECK(failsWith(map.place({14, 0}, tileBig), PlaceError::OutOfBounds));
-    CHECK(failsWith(map.place({0, 8}, tileBig), PlaceError::OutOfBounds));
-    CHECK(!map.canPlace({14, 0}, tileBig));
+    CHECK(failsWith(map.place(0, {-1, 0}, tileSmall), PlaceError::OutOfBounds));
+    CHECK(failsWith(map.place(0, {14, 0}, tileBig), PlaceError::OutOfBounds));
+    CHECK(failsWith(map.place(0, {0, 8}, tileBig), PlaceError::OutOfBounds));
+    CHECK(!map.canPlace(0, {14, 0}, tileBig));
 
     //a 4x4 tile fits exactly in the bottom-right corner
-    CHECK(map.canPlace({12, 6}, tileBig));
+    CHECK(map.canPlace(0, {12, 6}, tileBig));
 
     //overlapping another tile
-    CHECK(map.place({3, 3}, tileSmall).has_value());
-    CHECK(failsWith(map.place({1, 1}, tileBig), PlaceError::Overlap));
-    CHECK(!map.canPlace({1, 1}, tileBig));
-    CHECK(map.isFree({1, 1}));
-    CHECK(map.tile({3, 3}) == tileSmall);
+    CHECK(map.place(0, {3, 3}, tileSmall).has_value());
+    CHECK(failsWith(map.place(0, {1, 1}, tileBig), PlaceError::Overlap));
+    CHECK(!map.canPlace(0, {1, 1}, tileBig));
+    CHECK(map.isFree(0, {1, 1}));
+    CHECK(map.tile(0, {3, 3}) == tileSmall);
 }
 
 //solidity follows the tile type for every cell the tile covers
@@ -131,8 +134,8 @@ static void testSolid() {
     const TileId wall = addTile(map, 64, 32, true);
     const TileId decor = addTile(map, 32, 32, false);
 
-    CHECK(map.place({1, 1}, wall).has_value());
-    CHECK(map.place({5, 5}, decor).has_value());
+    CHECK(map.place(0, {1, 1}, wall).has_value());
+    CHECK(map.place(0, {5, 5}, decor).has_value());
 
     CHECK(map.isSolid({1, 1}));
     CHECK(map.isSolid({2, 1}));
@@ -169,6 +172,87 @@ static void testSpawnAndCheckpoints() {
     CHECK(map.checkpoints().size() == 2);
 }
 
+//layers: add, limits, names, move, remove, settings
+static void testLayers() {
+    Map map = Map::create(8, 6).value();
+    CHECK(map.layerCount() == 0);
+    CHECK(!map.hasLayer(0));
+
+    //layers are added in front, so the first one added is the back one
+    CHECK(map.addLayer({.name = "Back", .parallaxX = 0.5f}).value() == 0);
+    CHECK(map.addLayer({.name = "Ground", .solid = true}).value() == 1);
+    CHECK(map.addLayer({.name = "Front"}).value() == 2);
+    CHECK(map.layerCount() == 3);
+    CHECK(map.layerInfo(0).parallaxX == 0.5f && map.layerInfo(0).parallaxY == 1.0f);
+    CHECK(map.layerInfo(1).solid && !map.layerInfo(0).solid);
+
+    //bad names are refused
+    CHECK(failsWith(map.addLayer({.name = ""}), MapError::InvalidLayer));
+    CHECK(failsWith(map.addLayer({.name = std::string(Map::kMaxLayerName + 1, 'a')}), MapError::InvalidLayer));
+    CHECK(!map.setLayerInfo(0, {.name = ""}));
+    CHECK(!map.setLayerInfo(9, {.name = "x"}));
+
+    //settings change
+    CHECK(map.setLayerInfo(2, {.name = "Fog", .parallaxX = 2.0f, .visible = false}));
+    CHECK(map.layerInfo(2).name == "Fog" && !map.layerInfo(2).visible);
+
+    //move: Back, Ground, Fog -> Ground, Fog, Back and then back again
+    CHECK(map.moveLayer(0, 2));
+    CHECK(map.layerInfo(0).name == "Ground" && map.layerInfo(1).name == "Fog" && map.layerInfo(2).name == "Back");
+    CHECK(map.moveLayer(2, 0));
+    CHECK(map.layerInfo(0).name == "Back" && map.layerInfo(1).name == "Ground" && map.layerInfo(2).name == "Fog");
+    CHECK(!map.moveLayer(0, 3));
+    CHECK(!map.moveLayer(-1, 0));
+
+    //remove gives the layer back with its tiles, and insert puts it in the same place
+    const TileId id = addTile(map, 32, 32);
+    CHECK(map.place(1, {2, 2}, id).has_value());
+    auto removed = map.removeLayer(1);
+    CHECK(removed.has_value() && removed->info.name == "Ground");
+    CHECK(map.layerCount() == 2 && !map.removeLayer(5).has_value());
+    CHECK(map.tile(1, {2, 2}) == kEmptyTile);
+    CHECK(map.insertLayer(1, std::move(*removed)).has_value());
+    CHECK(map.tile(1, {2, 2}) == id);
+
+    //a layer with the wrong size cannot be inserted
+    CHECK(failsWith(map.insertLayer(0, Map::Layer{{.name = "Bad"}, {}}), MapError::InvalidLayer));
+
+    //there is a limit
+    while (map.layerCount() < Map::kMaxLayers) {
+        CHECK(map.addLayer({.name = "More"}).has_value());
+    }
+    CHECK(failsWith(map.addLayer({.name = "One too many"}), MapError::TooManyLayers));
+}
+
+//every layer has its own tiles, and only solid layers block movement
+static void testLayerContents() {
+    Map map = Map::create(8, 6).value();
+    CHECK(map.addLayer({.name = "Back"}).has_value());
+    CHECK(map.addLayer({.name = "Ground", .solid = true}).has_value());
+    const TileId wall = addTile(map, 32, 32, true);
+
+    //the same cell can hold a tile in each layer
+    CHECK(map.place(0, {3, 3}, wall).has_value());
+    CHECK(map.place(1, {3, 3}, wall).has_value());
+    CHECK(failsWith(map.place(1, {3, 3}, wall), PlaceError::Overlap));
+    CHECK(failsWith(map.place(7, {3, 3}, wall), PlaceError::UnknownLayer));
+    CHECK(map.hasAnyTile({3, 3}) && !map.hasAnyTile({4, 3}));
+
+    //a solid tile on a layer that is not solid does not block
+    CHECK(map.place(0, {5, 5}, wall).has_value());
+    CHECK(!map.isSolid({5, 5}));
+    CHECK(map.isSolid({3, 3}));
+
+    //erasing in one layer leaves the other alone
+    CHECK(map.erase(1, {3, 3}).has_value());
+    CHECK(map.tile(0, {3, 3}) == wall && map.tile(1, {3, 3}) == kEmptyTile);
+    CHECK(!map.isSolid({3, 3}));
+
+    //making the layer solid changes the answer
+    CHECK(map.setLayerInfo(0, {.name = "Back", .solid = true}));
+    CHECK(map.isSolid({3, 3}) && map.isSolid({5, 5}));
+}
+
 //runs every test and any failed CHECK ends the program with exit code 1
 int main() {
     testCreate();
@@ -178,5 +262,7 @@ int main() {
     testPlaceErrors();
     testSolid();
     testSpawnAndCheckpoints();
+    testLayers();
+    testLayerContents();
     std::println("all map tests passed");
 }

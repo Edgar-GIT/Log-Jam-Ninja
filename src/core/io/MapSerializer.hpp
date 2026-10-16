@@ -12,7 +12,7 @@
 namespace ljn {
 
 //version of the file format, raise it whenever the format changes
-inline constexpr int kFormatVersion = 1;
+inline constexpr int kFormatVersion = 2;
 
 //everything that can go wrong when saving or loading
 enum class IoError : std::uint8_t {
@@ -26,6 +26,7 @@ enum class IoError : std::uint8_t {
     InvalidTile,
     InvalidPlacement,
     InvalidObject,
+    InvalidLayer,
 };
 
 //turns the map into json text

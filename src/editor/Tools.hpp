@@ -20,6 +20,12 @@ struct ToolState {
 
     //when on, a tile only lands on the grid of its own size (a 2x2 tile only on even cells)
     bool snap{true};
+
+    //the layer that painting and erasing work on
+    int layer{0};
+
+    //when on, the other layers are drawn faded so the active one stands out
+    bool dimOthers{true};
 };
 
 class Brush {

@@ -2,6 +2,7 @@
 
 #include "io/MapSerializer.hpp"
 
+#include <cmath>
 #include <fstream>
 #include <iterator>
 #include <limits>
@@ -44,11 +45,11 @@ std::expected<Map, IoError> buildMap(const json& root) {
     }
     Map map = std::move(*created);
 
-    //the three lists always exist in files we save
+    //the lists always exist in files we save
     const json* tiles = findArray(root, "tiles");
-    const json* placed = findArray(root, "placed");
+    const json* layers = findArray(root, "layers");
     const json* checkpoints = findArray(root, "checkpoints");
-    if (tiles == nullptr || placed == nullptr || checkpoints == nullptr) {
+    if (tiles == nullptr || layers == nullptr || checkpoints == nullptr) {
         return std::unexpected(IoError::InvalidFormat);
     }
 
@@ -59,15 +60,38 @@ std::expected<Map, IoError> buildMap(const json& root) {
         }
     }
 
-    //placed tiles: place() refuses overlaps and anything outside the map
-    for (const json& item : *placed) {
-        const auto entry = fromJsonObject<PlacedEntry>(item);
-        if (entry.tile < 1 || entry.tile > std::numeric_limits<TileId>::max()) {
-            return std::unexpected(IoError::InvalidPlacement);
+    //layers back to front, each one with its settings and its placed tiles
+    for (const json& item : *layers) {
+        const auto info = fromJsonObject<LayerInfo>(item);
+        const json* placed = findArray(item, "placed");
+        if (placed == nullptr) {
+            return std::unexpected(IoError::InvalidFormat);
         }
-        if (!map.place({entry.x, entry.y}, static_cast<TileId>(entry.tile))) {
-            return std::unexpected(IoError::InvalidPlacement);
+
+        //parallax must be a normal number, and the name and layer count are checked by addLayer
+        if (!std::isfinite(info.parallaxX) || !std::isfinite(info.parallaxY)) {
+            return std::unexpected(IoError::InvalidLayer);
         }
+        const auto layerIndex = map.addLayer(info);
+        if (!layerIndex) {
+            return std::unexpected(IoError::InvalidLayer);
+        }
+
+        //placed tiles: place() refuses overlaps and anything outside the map
+        for (const json& entryJson : *placed) {
+            const auto entry = fromJsonObject<PlacedEntry>(entryJson);
+            if (entry.tile < 1 || entry.tile > std::numeric_limits<TileId>::max()) {
+                return std::unexpected(IoError::InvalidPlacement);
+            }
+            if (!map.place(*layerIndex, {entry.x, entry.y}, static_cast<TileId>(entry.tile))) {
+                return std::unexpected(IoError::InvalidPlacement);
+            }
+        }
+    }
+
+    //a map needs at least one layer
+    if (map.layerCount() == 0) {
+        return std::unexpected(IoError::InvalidLayer);
     }
 
     //spawn point is optional
@@ -104,18 +128,25 @@ std::string toJson(const Map& map) {
     }
     root["tiles"] = std::move(tiles);
 
-    //placed tiles: only the top-left cell of each one, found by offset (0, 0)
-    json placed = json::array();
-    const auto grid = map.grid();
-    for (std::size_t y = 0; y < grid.extent(0); ++y) {
-        for (std::size_t x = 0; x < grid.extent(1); ++x) {
-            const Map::Slot& slot = grid[y, x];
-            if (slot.id != kEmptyTile && slot.dx == 0 && slot.dy == 0) {
-                placed.push_back(toJsonObject(PlacedEntry{.tile = slot.id,.x = static_cast<int>(x),.y = static_cast<int>(y)}));
+    //layers back to front, each one with its settings and only the top-left cell of each tile (offset 0, 0)
+    json layers = json::array();
+    for (int layer = 0; layer < map.layerCount(); ++layer) {
+        json item = toJsonObject(map.layerInfo(layer));
+        json placed = json::array();
+        const auto grid = map.grid(layer);
+        for (std::size_t y = 0; y < grid.extent(0); ++y) {
+            for (std::size_t x = 0; x < grid.extent(1); ++x) {
+                const Map::Slot& slot = grid[y, x];
+                if (slot.id != kEmptyTile && slot.dx == 0 && slot.dy == 0) {
+                    placed.push_back(toJsonObject(
+                        PlacedEntry{.tile = slot.id, .x = static_cast<int>(x), .y = static_cast<int>(y)}));
+                }
             }
         }
+        item["placed"] = std::move(placed);
+        layers.push_back(std::move(item));
     }
-    root["placed"] = std::move(placed);
+    root["layers"] = std::move(layers);
 
     //spawn point, only if one was set
     if (map.hasSpawn()) {
@@ -199,6 +230,7 @@ std::string_view describe(IoError error) noexcept {
         case IoError::InvalidTile:        return "A tile in the palette is invalid";
         case IoError::InvalidPlacement:   return "A placed tile is invalid or overlaps another";
         case IoError::InvalidObject:      return "Spawn or checkpoint is invalid";
+        case IoError::InvalidLayer:       return "A layer is invalid or there are no layers";
     }
     return "Unknown error";
 }

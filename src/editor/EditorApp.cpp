@@ -73,6 +73,10 @@ WindowGuard::~WindowGuard() {
 EditorApp::EditorApp()
     : m_window(kStartWidth, kStartHeight, "Log Jam Ninja - Map Editor"),
       m_map(Map::create(kDefaultMapWidth, kDefaultMapHeight).value()) {
+    //a new map starts with three layers: a slow background, the solid ground and a foreground
+    static_cast<void>(m_map.addLayer({.name = "Background", .parallaxX = 0.5f, .parallaxY = 0.5f}).value());
+    m_tools.layer = m_map.addLayer({.name = "Ground", .solid = true}).value();
+    static_cast<void>(m_map.addLayer({.name = "Foreground"}).value());
     m_camera.jumpToBottomLeft(viewSize(), m_map);
 }
 
@@ -91,7 +95,8 @@ void EditorApp::update(float dt) {
     const bool inputEnabled = !m_import.isOpen() && !m_animImport.isOpen() && m_confirm == Confirm::None;
     const Vector2 view = viewSize();
 
-    if (inputEnabled) {
+    //while a text box has the keyboard, letters and arrows belong to it
+    if (inputEnabled && !m_panel.isTyping()) {
         handleShortcuts();
 
         //a long freeze (for example the file dialog) must not make the camera jump
@@ -130,6 +135,14 @@ void EditorApp::handleShortcuts() {
         return;
     }
 
+    //Page Up goes to the layer in front, Page Down to the one behind
+    if (IsKeyPressed(KEY_PAGE_UP)) {
+        m_tools.layer = std::min(m_tools.layer + 1, m_map.layerCount() - 1);
+    }
+    if (IsKeyPressed(KEY_PAGE_DOWN)) {
+        m_tools.layer = std::max(m_tools.layer - 1, 0);
+    }
+
     //tool shortcuts
     if (IsKeyPressed(KEY_B)) {
         m_tools.tool = Tool::Paint;
@@ -157,7 +170,7 @@ void EditorApp::draw() {
     BeginScissorMode(0, 0, static_cast<int>(view.x), static_cast<int>(view.y));
     BeginMode2D(m_camera.raylib());
     drawGrid(m_map, m_camera.raylib(), view);
-    drawTiles(m_map, m_palette, m_camera.raylib(), view);
+    drawTiles(m_map, m_palette, m_camera.raylib(), view, m_tools.layer, m_tools.dimOthers);
     drawMarkers(m_map);
     if (reportIsFresh()) {
         drawIssues(m_report, m_camera.zoom());
@@ -173,12 +186,22 @@ void EditorApp::draw() {
         const std::string cellText = std::format("cell ({}, {})", cell->x, cell->y);
         DrawText(cellText.c_str(), 12, 36, 20, kTextColor);
     }
-    DrawText("arrows / middle mouse: move    wheel: zoom", 12, GetScreenHeight() - 28, 18, kTextColor);
+    if (m_map.hasLayer(m_tools.layer)) {
+        const std::string layerText = std::format("layer {}/{}: {}", m_tools.layer + 1, m_map.layerCount(),
+                                                  m_map.layerInfo(m_tools.layer).name);
+        DrawText(layerText.c_str(), 12, 62, 20, kTextColor);
+    }
+
+    //the hints, two lines at the bottom
+    DrawText("LMB place   RMB remove   B E S C: tools   G: snap   PgUp / PgDn: layer", 12,
+             GetScreenHeight() - 52, 18, kTextColor);
+    DrawText("arrows / middle mouse: move   wheel: zoom   Ctrl+S/O: save, open   Ctrl+Z/Y: undo, redo", 12,
+             GetScreenHeight() - 28, 18, kTextColor);
 
     //the status message, it disappears after a few seconds
     if (!m_status.text.empty() && GetTime() < m_status.until) {
         const int textWidth = MeasureText(m_status.text.c_str(), 20);
-        const int statusY = GetScreenHeight() - 72;
+        const int statusY = GetScreenHeight() - 96;
         DrawRectangle(8, statusY - 6, textWidth + 24, 34, kStatusBack);
         DrawText(m_status.text.c_str(), 20, statusY, 20, m_status.error ? kErrorColor : kTextColor);
     }
@@ -220,6 +243,7 @@ void EditorApp::draw() {
     if (panel.checkClicked) {
         checkMap();
     }
+    applyLayerActions(panel);
 
     //the import window goes on top of everything
     const Vector2 screen{static_cast<float>(GetScreenWidth()), static_cast<float>(GetScreenHeight())};
@@ -266,10 +290,45 @@ void EditorApp::addTile(const TileDef& def) {
 
 void EditorApp::undo() {
     static_cast<void>(m_history.undo(m_map));
+    clampLayer();
 }
 
 void EditorApp::redo() {
     static_cast<void>(m_history.redo(m_map));
+    clampLayer();
+}
+
+void EditorApp::clampLayer() {
+    m_tools.layer = std::clamp(m_tools.layer, 0, std::max(0, m_map.layerCount() - 1));
+}
+
+void EditorApp::applyLayerActions(const PanelResult& panel) {
+    //a stroke must not be cut in half by a layer change
+    if (m_brush.busy()) {
+        return;
+    }
+
+    if (panel.addLayerClicked) {
+        LayerInfo info{.name = std::format("Layer {}", m_map.layerCount() + 1)};
+        if (const auto index = m_history.addLayer(m_map, std::move(info))) {
+            m_tools.layer = *index;
+        } else {
+            setStatus("Cannot add another layer: the limit was reached", true);
+        }
+    }
+    if (panel.removeLayerClicked && m_history.removeLayer(m_map, m_tools.layer)) {
+        clampLayer();
+        setStatus("Layer removed (Ctrl+Z brings it back)", false);
+    }
+    if (panel.moveLayer != 0) {
+        const int target = m_tools.layer + panel.moveLayer;
+        if (m_history.moveLayer(m_map, m_tools.layer, target)) {
+            m_tools.layer = target;
+        }
+    }
+    if (panel.layerEdit) {
+        static_cast<void>(m_history.editLayer(m_map, panel.layerEdit->index, panel.layerEdit->info));
+    }
 }
 
 bool EditorApp::reportIsFresh() const noexcept {
@@ -373,6 +432,15 @@ void EditorApp::openMap() {
     m_history.markSaved();
     m_palette.sync(m_map);
     m_palette.select(m_map.tileDefs().empty() ? kEmptyTile : TileId{1});
+
+    //start on the first solid layer, or on the first layer if none is solid
+    m_tools.layer = 0;
+    for (int layer = 0; layer < m_map.layerCount(); ++layer) {
+        if (m_map.layerInfo(layer).solid) {
+            m_tools.layer = layer;
+            break;
+        }
+    }
     m_camera.jumpToBottomLeft(viewSize(), m_map);
     m_reportRevision.reset();
     setStatus(std::format("Opened {}", path->filename().string()), false);

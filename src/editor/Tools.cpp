@@ -1,4 +1,4 @@
-// Tools.cpp - implementation of the brush: painting, erasing, spawn and checkpoints, and the preview.
+// Tools.cpp - implementation of the brush: painting and erasing in the active layer, spawn and checkpoints, and the preview.
 
 #include "Tools.hpp"
 
@@ -27,6 +27,11 @@ Rectangle cellsRect(Cell origin, int cellsWide, int cellsHigh) {
 //moves a cell back to the grid of the tile's own size, so a 2x2 tile only lands on even cells
 Cell snapped(Cell cell, const TileDef& def) {
     return {cell.x - cell.x % def.cellsWide(), cell.y - cell.y % def.cellsHigh()};
+}
+
+//true if the active layer exists and can be edited (a hidden layer cannot, you would not see what you do)
+bool layerEditable(const Map& map, int layer) {
+    return map.hasLayer(layer) && map.layerInfo(layer).visible;
 }
 
 //the tile type selected in the palette, or nullptr if there is none
@@ -112,13 +117,18 @@ void Brush::update(Map& map, History& history, const Palette& palette, const Too
         return;
     }
 
-    //apply the stroke to the cell under the mouse
+    //hidden layers cannot be edited
+    if (!layerEditable(map, tools.layer)) {
+        return;
+    }
+
+    //apply the stroke to the cell under the mouse, in the active layer
     if (m_stroke == Stroke::Erase) {
-        static_cast<void>(history.erase(map, *m_hovered));
+        static_cast<void>(history.erase(map, tools.layer, *m_hovered));
     } else if (m_stroke == Stroke::Paint) {
         if (const TileDef* def = selectedDef(map, palette)) {
             const Cell origin = tools.snap ? snapped(*m_hovered, *def) : *m_hovered;
-            static_cast<void>(history.place(map, origin, palette.selected()));
+            static_cast<void>(history.place(map, tools.layer, origin, palette.selected()));
         }
     }
 }
@@ -140,15 +150,23 @@ void Brush::drawPreview(const Map& map, const Palette& palette, const ToolState&
         return;
     }
 
+    //a hidden layer cannot be edited: the cell turns red
+    if (!layerEditable(map, tools.layer)) {
+        const Rectangle rect = cellsRect(*m_hovered, 1, 1);
+        DrawRectangleRec(rect, kBlockedFill);
+        DrawRectangleLinesEx(rect, 2.0f / zoom, kBlockedLine);
+        return;
+    }
+
     //erasing (erase tool, or right button): show the whole tile that would be removed
     if (tools.tool == Tool::Erase || m_stroke == Stroke::Erase) {
-        const TileId id = map.tile(*m_hovered);
+        const TileId id = map.tile(tools.layer, *m_hovered);
         if (id == kEmptyTile) {
             drawHoverCell(*m_hovered, zoom);
             return;
         }
         const TileDef& def = map.tileDefs()[static_cast<std::size_t>(id) - 1];
-        const Rectangle rect = cellsRect(map.originOf(*m_hovered), def.cellsWide(), def.cellsHigh());
+        const Rectangle rect = cellsRect(map.originOf(tools.layer, *m_hovered), def.cellsWide(), def.cellsHigh());
         DrawRectangleRec(rect, kEraseFill);
         DrawRectangleLinesEx(rect, 2.0f / zoom, kBlockedLine);
         return;
@@ -172,14 +190,14 @@ void Brush::drawPreview(const Map& map, const Palette& palette, const ToolState&
     for (int dy = 0; dy < def->cellsHigh(); ++dy) {
         for (int dx = 0; dx < def->cellsWide(); ++dx) {
             const Cell cell{origin.x + dx, origin.y + dy};
-            if (!map.isFree(cell)) {
+            if (!map.isFree(tools.layer, cell)) {
                 DrawRectangleRec(cellsRect(cell, 1, 1), kBlockedFill);
             }
         }
     }
 
     //outline of the whole footprint: yellow if it fits, red if it does not
-    const bool fits = map.canPlace(origin, palette.selected());
+    const bool fits = map.canPlace(tools.layer, origin, palette.selected());
     DrawRectangleLinesEx(cellsRect(origin, def->cellsWide(), def->cellsHigh()), 2.0f / zoom,
                          fits ? kHoverLine : kBlockedLine);
 }

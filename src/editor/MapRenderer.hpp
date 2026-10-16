@@ -1,4 +1,4 @@
-// MapRenderer.hpp - draws the tiles that are placed on the map.
+// MapRenderer.hpp - draws the tiles of every layer.
 
 #pragma once
 
@@ -8,7 +8,10 @@
 
 namespace ljn {
 
+//draws the visible layers from back to front, without parallax (the editor shows the plain grid)
+//when dimOthers is on, every layer except the active one is drawn faded
 //call this between BeginMode2D and EndMode2D, after drawGrid
-void drawTiles(const Map& map, const Palette& palette, const Camera2D& camera, Vector2 viewSize);
+void drawTiles(const Map& map, const Palette& palette, const Camera2D& camera, Vector2 viewSize,
+               int activeLayer, bool dimOthers);
 
 }  //namespace ljn

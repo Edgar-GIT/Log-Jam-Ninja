@@ -35,6 +35,7 @@ struct LayerEdit {
 struct PanelResult {
     bool loadTileClicked{false};
     bool loadAnimatedClicked{false};
+    bool newClicked{false};
     bool openClicked{false};
     bool saveClicked{false};
     bool undoClicked{false};

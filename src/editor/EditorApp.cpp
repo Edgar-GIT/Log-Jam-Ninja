@@ -46,6 +46,14 @@ bool pressedOrRepeated(int key) {
     return IsKeyPressed(key) || IsKeyPressedRepeat(key);
 }
 
+//gives a new map its three starting layers and returns the index of the solid ground layer
+int addDefaultLayers(Map& map) {
+    static_cast<void>(map.addLayer({.name = "Background", .parallaxX = 0.5f, .parallaxY = 0.5f}).value());
+    const int ground = map.addLayer({.name = "Ground", .solid = true}).value();
+    static_cast<void>(map.addLayer({.name = "Foreground"}).value());
+    return ground;
+}
+
 //how many issues of one severity a report has
 int countSeverity(const ValidationReport& report, Severity severity) {
     return static_cast<int>(std::ranges::count(report.issues, severity, &Issue::severity));
@@ -74,14 +82,16 @@ EditorApp::EditorApp()
     : m_window(kStartWidth, kStartHeight, "Log Jam Ninja - Map Editor"),
       m_map(Map::create(kDefaultMapWidth, kDefaultMapHeight).value()) {
     //a new map starts with three layers: a slow background, the solid ground and a foreground
-    static_cast<void>(m_map.addLayer({.name = "Background", .parallaxX = 0.5f, .parallaxY = 0.5f}).value());
-    m_tools.layer = m_map.addLayer({.name = "Ground", .solid = true}).value();
-    static_cast<void>(m_map.addLayer({.name = "Foreground"}).value());
+    m_tools.layer = addDefaultLayers(m_map);
     m_camera.jumpToBottomLeft(viewSize(), m_map);
 }
 
 void EditorApp::run() {
-    while (!WindowShouldClose()) {
+    while (!m_quit) {
+        //the window close button asks first when there are unsaved changes
+        if (WindowShouldClose()) {
+            requestQuit();
+        }
         update(GetFrameTime());
         draw();
     }
@@ -92,7 +102,7 @@ void EditorApp::update(float dt) {
     m_palette.setTime(GetTime());
 
     //while a window or a question is open it takes all the input
-    const bool inputEnabled = !m_import.isOpen() && !m_animImport.isOpen() && m_confirm == Confirm::None;
+    const bool inputEnabled = !m_import.isOpen() && !m_animImport.isOpen() && !m_newMap.isOpen() && m_confirm == Confirm::None;
     const Vector2 view = viewSize();
 
     //while a text box has the keyboard, letters and arrows belong to it
@@ -102,7 +112,8 @@ void EditorApp::update(float dt) {
         //a long freeze (for example the file dialog) must not make the camera jump
         m_camera.update(std::min(dt, 0.05f), view, m_map);
     }
-    m_brush.update(m_map, m_history, m_palette, m_tools, m_camera, view, inputEnabled);
+    //the parallax preview shows the layers moved, so painting there would hit the wrong cells
+    m_brush.update(m_map, m_history, m_palette, m_tools, m_camera, view, inputEnabled && !m_tools.parallaxPreview);
     updateTitle();
 }
 
@@ -117,6 +128,9 @@ void EditorApp::handleShortcuts() {
         }
         if (IsKeyPressed(KEY_O)) {
             requestOpen();
+        }
+        if (IsKeyPressed(KEY_N)) {
+            requestNew();
         }
 
         //undo and redo are not allowed in the middle of a stroke
@@ -159,6 +173,9 @@ void EditorApp::handleShortcuts() {
     if (IsKeyPressed(KEY_G)) {
         m_tools.snap = !m_tools.snap;
     }
+    if (IsKeyPressed(KEY_P)) {
+        m_tools.parallaxPreview = !m_tools.parallaxPreview;
+    }
 }
 
 void EditorApp::draw() {
@@ -170,7 +187,7 @@ void EditorApp::draw() {
     BeginScissorMode(0, 0, static_cast<int>(view.x), static_cast<int>(view.y));
     BeginMode2D(m_camera.raylib());
     drawGrid(m_map, m_camera.raylib(), view);
-    drawTiles(m_map, m_palette, m_camera.raylib(), view, m_tools.layer, m_tools.dimOthers);
+    drawTiles(m_map, m_palette, m_camera.raylib(), view, m_tools.layer, m_tools.dimOthers, m_tools.parallaxPreview);
     drawMarkers(m_map);
     if (reportIsFresh()) {
         drawIssues(m_report, m_camera.zoom());
@@ -192,10 +209,14 @@ void EditorApp::draw() {
         DrawText(layerText.c_str(), 12, 62, 20, kTextColor);
     }
 
+    if (m_tools.parallaxPreview) {
+        DrawText("PARALLAX PREVIEW (editing is off, press P to leave)", 12, 88, 20, kErrorColor);
+    }
+
     //the hints, two lines at the bottom
-    DrawText("LMB place   RMB remove   B E S C: tools   G: snap   PgUp / PgDn: layer", 12,
+    DrawText("LMB place  RMB remove  B E S C tools  G snap  P parallax  PgUp/PgDn layer", 12,
              GetScreenHeight() - 52, 18, kTextColor);
-    DrawText("arrows / middle mouse: move   wheel: zoom   Ctrl+S/O: save, open   Ctrl+Z/Y: undo, redo", 12,
+    DrawText("arrows/middle mouse: move  wheel: zoom  Ctrl+N/O/S: new, open, save  Ctrl+Z/Y: undo", 12,
              GetScreenHeight() - 28, 18, kTextColor);
 
     //the status message, it disappears after a few seconds
@@ -207,7 +228,7 @@ void EditorApp::draw() {
     }
 
     //the side panel, locked while a window or a question is open so it ignores clicks
-    const bool modalOpen = m_import.isOpen() || m_animImport.isOpen() || m_confirm != Confirm::None;
+    const bool modalOpen = m_import.isOpen() || m_animImport.isOpen() || m_newMap.isOpen() || m_confirm != Confirm::None;
     if (modalOpen) {
         GuiLock();
     }
@@ -227,6 +248,9 @@ void EditorApp::draw() {
     }
     if (panel.loadAnimatedClicked) {
         m_animImport.start();
+    }
+    if (panel.newClicked) {
+        requestNew();
     }
     if (panel.openClicked) {
         requestOpen();
@@ -253,16 +277,26 @@ void EditorApp::draw() {
     if (const auto tile = m_animImport.draw(screen)) {
         addTile(*tile);
     }
+    if (const auto size = m_newMap.draw(screen)) {
+        createMap(*size);
+    }
 
     //the question about unsaved changes: 1 is Save, 2 is Discard, anything else cancels
-    if (m_confirm == Confirm::DiscardForOpen) {
+    if (m_confirm != Confirm::None) {
+        const char* question = "Save the map before opening another one?";
+        if (m_confirm == Confirm::DiscardForNew) {
+            question = "Save the map before starting a new one?";
+        } else if (m_confirm == Confirm::DiscardForQuit) {
+            question = "Save the map before closing the editor?";
+        }
+
         const Rectangle box{screen.x * 0.5f - 220.0f, screen.y * 0.5f - 90.0f, 440.0f, 180.0f};
-        const int choice = GuiMessageBox(box, "Unsaved changes", "Save the map before opening another one?",
-                                         "Save;Discard;Cancel");
+        const int choice = GuiMessageBox(box, "Unsaved changes", question, "Save;Discard;Cancel");
         if (choice >= 0) {
+            const Confirm action = m_confirm;
             m_confirm = Confirm::None;
             if (choice == 2 || (choice == 1 && save(false))) {
-                openMap();
+                continueAfterConfirm(action);
             }
         }
     }
@@ -411,6 +445,61 @@ void EditorApp::requestOpen() {
         return;
     }
     openMap();
+}
+
+void EditorApp::requestNew() {
+    //unsaved changes: ask first
+    if (m_history.isDirty()) {
+        m_confirm = Confirm::DiscardForNew;
+        return;
+    }
+    m_newMap.open();
+}
+
+void EditorApp::requestQuit() {
+    //a question is already open, the answer to it decides
+    if (m_confirm != Confirm::None) {
+        return;
+    }
+    if (m_history.isDirty()) {
+        m_confirm = Confirm::DiscardForQuit;
+        return;
+    }
+    m_quit = true;
+}
+
+void EditorApp::continueAfterConfirm(Confirm action) {
+    switch (action) {
+        case Confirm::DiscardForOpen: openMap(); break;
+        case Confirm::DiscardForNew:  m_newMap.open(); break;
+        case Confirm::DiscardForQuit: m_quit = true; break;
+        case Confirm::None:           break;
+    }
+}
+
+void EditorApp::createMap(MapSize size) {
+    auto created = Map::create(size.width, size.height);
+    if (!created) {
+        setStatus("Cannot create a map with that size", true);
+        return;
+    }
+
+    //the tile types stay, so the palette is ready to use (the ids stay the same)
+    Map map = std::move(*created);
+    for (const TileDef& def : m_map.tileDefs()) {
+        static_cast<void>(map.addTileDef(def));
+    }
+    m_tools.layer = addDefaultLayers(map);
+
+    //the new map replaces everything: history, check result, file and view
+    m_map = std::move(map);
+    m_path.reset();
+    m_history.clear();
+    m_history.markSaved();
+    m_palette.sync(m_map);
+    m_camera.jumpToBottomLeft(viewSize(), m_map);
+    m_reportRevision.reset();
+    setStatus(std::format("New map {}x{}", size.width, size.height), false);
 }
 
 void EditorApp::openMap() {

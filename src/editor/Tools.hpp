@@ -26,6 +26,9 @@ struct ToolState {
 
     //when on, the other layers are drawn faded so the active one stands out
     bool dimOthers{true};
+
+    //when on, the layers move with their parallax like in the game, and editing is switched off
+    bool parallaxPreview{false};
 };
 
 class Brush {

@@ -42,24 +42,40 @@ void drawLayer(const Map& map, int layer, const Palette& palette, Color tint, in
 }  //anonymous namespace
 
 void drawTiles(const Map& map, const Palette& palette, const Camera2D& camera, Vector2 viewSize,
-               int activeLayer, bool dimOthers) {
+               int activeLayer, bool dimOthers, bool parallax) {
     const auto cellSize = static_cast<float>(kCellSize);
-
-    //the cells that are on screen
-    const Vector2 topLeft = GetScreenToWorld2D({0.0f, 0.0f}, camera);
-    const Vector2 bottomRight = GetScreenToWorld2D(viewSize, camera);
-    const int firstX = std::max(0, static_cast<int>(std::floor(topLeft.x / cellSize)));
-    const int firstY = std::max(0, static_cast<int>(std::floor(topLeft.y / cellSize)));
-    const int lastX = std::min(map.width() - 1, static_cast<int>(std::floor(bottomRight.x / cellSize)));
-    const int lastY = std::min(map.height() - 1, static_cast<int>(std::floor(bottomRight.y / cellSize)));
 
     //back to front, so the front layers cover the ones behind
     for (int layer = 0; layer < map.layerCount(); ++layer) {
-        if (!map.layerInfo(layer).visible) {
+        const LayerInfo& info = map.layerInfo(layer);
+        if (!info.visible) {
             continue;
         }
+
+        //with parallax the layer sees a camera that moves slower (or faster) than the real one
+        Camera2D layerCamera = camera;
+        if (parallax) {
+            layerCamera.target = {camera.target.x * info.parallaxX, camera.target.y * info.parallaxY};
+            EndMode2D();
+            BeginMode2D(layerCamera);
+        }
+
+        //the cells of the map that this camera sees
+        const Vector2 topLeft = GetScreenToWorld2D({0.0f, 0.0f}, layerCamera);
+        const Vector2 bottomRight = GetScreenToWorld2D(viewSize, layerCamera);
+        const int firstX = std::max(0, static_cast<int>(std::floor(topLeft.x / cellSize)));
+        const int firstY = std::max(0, static_cast<int>(std::floor(topLeft.y / cellSize)));
+        const int lastX = std::min(map.width() - 1, static_cast<int>(std::floor(bottomRight.x / cellSize)));
+        const int lastY = std::min(map.height() - 1, static_cast<int>(std::floor(bottomRight.y / cellSize)));
+
         const Color tint = (dimOthers && layer != activeLayer) ? Fade(WHITE, kDimAlpha) : WHITE;
         drawLayer(map, layer, palette, tint, firstX, firstY, lastX, lastY);
+    }
+
+    //the rest of the frame is drawn with the real camera again
+    if (parallax) {
+        EndMode2D();
+        BeginMode2D(camera);
     }
 }
 

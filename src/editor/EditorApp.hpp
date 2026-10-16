@@ -14,6 +14,7 @@
 #include "map/History.hpp"
 #include "map/Map.hpp"
 #include "ui/AnimImport.hpp"
+#include "ui/NewMapDialog.hpp"
 #include "ui/Panels.hpp"
 #include "ui/TileImport.hpp"
 #include "validation/Validator.hpp"
@@ -39,7 +40,7 @@ struct Status {
 };
 
 //a question that blocks the editor until the user answers
-enum class Confirm : std::uint8_t { None, DiscardForOpen };
+enum class Confirm : std::uint8_t { None, DiscardForOpen, DiscardForNew, DiscardForQuit };
 
 class EditorApp {
 public:
@@ -72,6 +73,12 @@ private:
     bool save(bool askForPath);
     void requestOpen();
     void openMap();
+    void requestNew();
+    void createMap(MapSize size);
+    void requestQuit();
+
+    //does what the user wanted before the question about unsaved changes
+    void continueAfterConfirm(Confirm action);
 
     //true if the last check still matches the map
     [[nodiscard]] bool reportIsFresh() const noexcept;
@@ -91,6 +98,7 @@ private:
     SidePanel m_panel;
     TileImportDialog m_import;
     AnimImportDialog m_animImport;
+    NewMapDialog m_newMap;
 
     //the last map check, and the history revision it was made at
     ValidationReport m_report;
@@ -99,6 +107,9 @@ private:
 
     //the file the map came from or was saved to, empty for a new map
     std::optional<std::filesystem::path> m_path;
+
+    //set when the editor must stop running
+    bool m_quit{false};
 
     Status m_status;
     Confirm m_confirm{Confirm::None};

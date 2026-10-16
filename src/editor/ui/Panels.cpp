@@ -30,7 +30,7 @@ constexpr float kBottomArea = 72.0f;
 constexpr float kTileInfo = 78.0f;
 
 //layer list: height of the box and of one row
-constexpr float kLayerListHeight = 156.0f;
+constexpr float kLayerListHeight = 130.0f;
 constexpr float kLayerRow = 26.0f;
 constexpr float kLayerBox = 24.0f;
 
@@ -121,9 +121,11 @@ PanelResult SidePanel::draw(Rectangle area, const Map& map, Palette& palette, To
     m_tab = static_cast<Tab>(tab);
     y += 40.0f;
 
-    //open and save, the star says there are unsaved changes
-    result.openClicked = button({x, y, half, 36.0f}, "Open");
-    result.saveClicked = button({x + half + kGap, y, half, 36.0f}, info.dirty ? "Save*" : "Save");
+    //new, open and save, the star says there are unsaved changes
+    const float third = (width - 2.0f * kGap) / 3.0f;
+    result.newClicked = button({x, y, third, 36.0f}, "New");
+    result.openClicked = button({x + third + kGap, y, third, 36.0f}, "Open");
+    result.saveClicked = button({x + 2.0f * (third + kGap), y, third, 36.0f}, info.dirty ? "Save*" : "Save");
     y += 44.0f;
 
     //undo and redo, grayed out when there is nothing to do
@@ -340,6 +342,8 @@ void SidePanel::drawLayersTab(float x, float y, float width, float /*bottom*/, c
     y += 40.0f;
 
     GuiCheckBox({x, y, 28.0f, 28.0f}, "Dim other layers", &tools.dimOthers);
+    y += 34.0f;
+    GuiCheckBox({x, y, 28.0f, 28.0f}, "Parallax preview (P)", &tools.parallaxPreview);
 }
 
 }  //namespace ljn

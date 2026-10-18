@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cmath>
 #include <format>
+#include <iterator>
+#include <string>
 #include <utility>
 #include "LevelRenderer.hpp"
 #include "assets/AssetPath.hpp"
@@ -37,10 +39,41 @@ constexpr Color kPlayerBody{240, 150, 40, 255};
 constexpr Color kPlayerBand{60, 40, 30, 255};
 constexpr Color kPlayerEye{255, 255, 255, 255};
 constexpr Color kHitbox{80, 255, 120, 255};
+constexpr Color kSpriteFrame{255, 220, 80, 255};
 constexpr Color kSpawnColor{70, 210, 100, 255};
 constexpr Color kCheckpointOff{70, 120, 190, 255};
 constexpr Color kCheckpointOn{110, 220, 255, 255};
 constexpr Color kPole{235, 235, 240, 255};
+
+//the player sprite is 64x64, the hitbox sits inside it with the feet on the bottom line
+constexpr int kSpriteSize = 64;
+
+//one row of the tuning panel: a number of PlayerParams, how much one key press changes it, and its limits
+struct Tunable {
+    const char* name;
+    float PlayerParams::* field;
+    float step;
+    float min;
+    float max;
+};
+
+constexpr Tunable kTunables[] = {
+    {"hitbox width", &PlayerParams::width, 2.0f, 16.0f, 64.0f},
+    {"hitbox height", &PlayerParams::height, 2.0f, 16.0f, 64.0f},
+    {"run speed", &PlayerParams::runSpeed, 10.0f, 60.0f, 700.0f},
+    {"ground accel", &PlayerParams::groundAccel, 100.0f, 200.0f, 6000.0f},
+    {"ground friction", &PlayerParams::groundFriction, 100.0f, 200.0f, 6000.0f},
+    {"air accel", &PlayerParams::airAccel, 100.0f, 100.0f, 6000.0f},
+    {"air friction", &PlayerParams::airFriction, 100.0f, 0.0f, 6000.0f},
+    {"jump height", &PlayerParams::jumpHeight, 4.0f, 16.0f, 300.0f},
+    {"tap height", &PlayerParams::tapHeight, 4.0f, 8.0f, 300.0f},
+    {"apex time", &PlayerParams::apexTime, 0.01f, 0.10f, 1.00f},
+    {"fall gravity x", &PlayerParams::fallGravityScale, 0.05f, 0.5f, 4.0f},
+    {"max fall speed", &PlayerParams::maxFall, 25.0f, 200.0f, 1400.0f},
+    {"coyote time", &PlayerParams::coyoteTime, 0.01f, 0.0f, 0.4f},
+    {"jump buffer", &PlayerParams::jumpBuffer, 0.01f, 0.0f, 0.4f},
+};
+constexpr int kTunableCount = static_cast<int>(std::size(kTunables));
 
 //a folder that is not found is a real problem, the game cannot work without it
 std::filesystem::path assetsOrDie(const std::filesystem::path& executableDir) {
@@ -127,6 +160,9 @@ void Game::readInput() {
         UnloadDroppedFiles(dropped);
     }
 
+    //F5 tuning panel keys
+    handleTuningKeys();
+
     //movement: arrows or A and D, jump: space, up, W, Z or K
     const bool left = anyDown({KEY_LEFT, KEY_A});
     const bool right = anyDown({KEY_RIGHT, KEY_D});
@@ -140,6 +176,67 @@ void Game::readInput() {
     //the press waits here until a logic step uses it
     if (anyPressed({KEY_SPACE, KEY_UP, KEY_W, KEY_Z, KEY_K})) {
         m_jumpQueued = true;
+    }
+}
+
+void Game::handleTuningKeys() {
+    if (IsKeyPressed(KEY_F5)) {
+        m_showTuning = !m_showTuning;
+    }
+    if (!m_showTuning) {
+        return;
+    }
+
+    //tab (or shift+tab) selects a row
+    const bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+    if (IsKeyPressed(KEY_TAB)) {
+        m_tuneIndex = (m_tuneIndex + (shift ? kTunableCount - 1 : 1)) % kTunableCount;
+    }
+
+    //page up and page down change the value (hold shift for tiny steps), holding the key repeats
+    int direction = 0;
+    if (IsKeyPressed(KEY_PAGE_UP) || IsKeyPressedRepeat(KEY_PAGE_UP)) {
+        direction = 1;
+    } else if (IsKeyPressed(KEY_PAGE_DOWN) || IsKeyPressedRepeat(KEY_PAGE_DOWN)) {
+        direction = -1;
+    }
+    if (direction != 0) {
+        const Tunable& row = kTunables[m_tuneIndex];
+        const float oldWidth = m_params.width;
+        const float oldHeight = m_params.height;
+
+        float& value = m_params.*row.field;
+        value = std::clamp(value + static_cast<float>(direction) * row.step * (shift ? 0.1f : 1.0f), row.min, row.max);
+
+        //a tap can never be higher than the full jump
+        m_params.tapHeight = std::min(m_params.tapHeight, m_params.jumpHeight);
+
+        //a new hitbox size keeps the feet and the center where they were
+        m_player.position.x += (oldWidth - m_params.width) * 0.5f;
+        m_player.position.y += oldHeight - m_params.height;
+    }
+
+    //F7 goes back to the default numbers
+    if (IsKeyPressed(KEY_F7)) {
+        m_params = PlayerParams{};
+        setStatus("Player params reset", false);
+    }
+
+    //F6 copies the numbers as C++ code, ready to paste into PlayerParams
+    if (IsKeyPressed(KEY_F6)) {
+        std::string text = "PlayerParams{\n";
+        text += std::format(
+            "    .width = {:.3f}f, .height = {:.3f}f,\n"
+            "    .runSpeed = {:.3f}f, .groundAccel = {:.3f}f, .groundFriction = {:.3f}f,\n"
+            "    .airAccel = {:.3f}f, .airFriction = {:.3f}f,\n"
+            "    .jumpHeight = {:.3f}f, .tapHeight = {:.3f}f, .apexTime = {:.3f}f,\n"
+            "    .maxFall = {:.3f}f, .fallGravityScale = {:.3f}f,\n"
+            "    .coyoteTime = {:.3f}f, .jumpBuffer = {:.3f}f}};\n",
+            m_params.width, m_params.height, m_params.runSpeed, m_params.groundAccel, m_params.groundFriction,
+            m_params.airAccel, m_params.airFriction, m_params.jumpHeight, m_params.tapHeight, m_params.apexTime,
+            m_params.maxFall, m_params.fallGravityScale, m_params.coyoteTime, m_params.jumpBuffer);
+        SetClipboardText(text.c_str());
+        setStatus("Player params copied to the clipboard", false);
     }
 }
 
@@ -235,6 +332,10 @@ void Game::draw() {
                  kTextColor);
     }
 
+    if (m_showTuning) {
+        drawTuning();
+    }
+
     //the status message
     if (!m_status.empty() && GetTime() < m_statusUntil) {
         DrawRectangle(0, Screen::kHeight - 34, Screen::kWidth, 34, kShade);
@@ -263,19 +364,52 @@ void Game::drawMarkers(const Vector2& camera) const {
     }
 }
 
+void Game::drawTuning() const {
+    //a panel on the right side, one row for each number
+    constexpr int kPanelWidth = 340;
+    constexpr int kRowHeight = 22;
+    const int x = Screen::kWidth - kPanelWidth;
+    const int height = 30 + kTunableCount * kRowHeight + 6 * kRowHeight / 2 + 16;
+    DrawRectangle(x, 0, kPanelWidth, height, kShade);
+    DrawText("PLAYER TUNING", x + 8, 6, 20, kHitbox);
+
+    for (int i = 0; i < kTunableCount; ++i) {
+        const Tunable& row = kTunables[i];
+        const int y = 30 + i * kRowHeight;
+        const bool selected = i == m_tuneIndex;
+        if (selected) {
+            DrawRectangle(x + 4, y - 1, kPanelWidth - 8, kRowHeight, Color{255, 255, 255, 40});
+        }
+        const Color color = selected ? kHitbox : kTextColor;
+        DrawText(row.name, x + 8, y, 20, color);
+        DrawText(std::format("{:.2f}", m_params.*row.field).c_str(), x + 210, y, 20, color);
+    }
+
+    //the numbers the physics works out from the ones above, and the keys
+    const int infoY = 30 + kTunableCount * kRowHeight + 6;
+    DrawText(std::format("gravity {:.0f}  jump speed {:.0f}", m_params.gravity(), m_params.jumpSpeed()).c_str(), x + 8,
+             infoY, 20, kTextColor);
+    DrawText("Tab select   PgUp/PgDn change", x + 8, infoY + 24, 10, kTextColor);
+    DrawText("Shift: tiny steps   F6 copy code   F7 reset", x + 8, infoY + 38, 10, kTextColor);
+}
+
 void Game::drawPlayer(const Vector2& camera) const {
     const auto x = static_cast<int>(std::floor(m_player.position.x - std::floor(camera.x)));
     const auto y = static_cast<int>(std::floor(m_player.position.y - std::floor(camera.y)));
     const auto width = static_cast<int>(m_params.width);
     const auto height = static_cast<int>(m_params.height);
 
-    //the body, a dark band for the head, and one eye on the side the player looks at
+    //the body fills the hitbox, a dark band for the head, and one eye on the side the player looks at
     DrawRectangle(x, y, width, height, kPlayerBody);
-    DrawRectangle(x, y + 8, width, 6, kPlayerBand);
-    const int eyeX = m_player.facing > 0 ? x + width - 9 : x + 3;
-    DrawRectangle(eyeX, y + 16, 6, 6, kPlayerEye);
+    DrawRectangle(x, y + 12, width, 8, kPlayerBand);
+    const int eyeX = m_player.facing > 0 ? x + width - 18 : x + 10;
+    DrawRectangle(eyeX, y + 24, 8, 8, kPlayerEye);
 
     if (m_showHitbox) {
+        //the 64x64 sprite frame: centered on the hitbox, feet on the same line
+        const int spriteX = x - (kSpriteSize - width) / 2;
+        const int spriteY = y + height - kSpriteSize;
+        DrawRectangleLines(spriteX, spriteY, kSpriteSize, kSpriteSize, kSpriteFrame);
         DrawRectangleLines(x, y, width, height, kHitbox);
     }
 }

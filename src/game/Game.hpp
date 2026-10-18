@@ -49,6 +49,10 @@ private:
     //the camera moves toward the player, smoothly
     void followPlayer(float dt);
 
+    //the tuning panel (F5): keys that change the player params while playing, and its drawing
+    void handleTuningKeys();
+    void drawTuning() const;
+
     //drawing helpers
     void drawMarkers(const Vector2& camera) const;
     void drawPlayer(const Vector2& camera) const;
@@ -88,6 +92,10 @@ private:
 
     bool m_showDebug{true};
     bool m_showHitbox{false};
+
+    //F5: the tuning panel, and which row of it is selected
+    bool m_showTuning{false};
+    int m_tuneIndex{0};
 };
 
 }  //namespace ljn

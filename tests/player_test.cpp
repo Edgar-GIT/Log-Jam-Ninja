@@ -75,9 +75,12 @@ static void testLanding() {
 //spawnState puts the feet on the bottom of the cell and the body in the middle of it
 static void testSpawnState() {
     const PlayerParams params;
+    CHECK(near(params.width, 56.0f) && near(params.height, 56.0f));
+
+    //the hitbox is wider than a cell, so it sticks out the same amount on both sides: (32 - 56) / 2 = -12
     const PlayerState state = spawnState({4, 6}, params);
-    CHECK(near(state.position.x, 4.0f * 32.0f + 4.0f));
-    CHECK(near(state.position.y, 7.0f * 32.0f - 48.0f));
+    CHECK(near(state.position.x, 4.0f * 32.0f - 12.0f));
+    CHECK(near(state.position.y, 7.0f * 32.0f - 56.0f));
 }
 
 //running right speeds up to the top speed and stops at a wall, left stops at the edge of the map
@@ -121,8 +124,9 @@ static void testFriction() {
     CHECK(state.velocity.x == 0.0f);
 }
 
-//the highest point of a jump with the button held (or released at once), measured in pixels above the start
-static float jumpHeight(const World& world, bool hold) {
+//the highest point of a jump, in pixels above the start
+//the button is held until step releaseAt (a negative number means never released, 0 means a tap)
+static float jumpHeight(const World& world, int releaseAt) {
     const PlayerParams params;
     PlayerState state = spawnState({3, 10}, params);
     run(state, world.map, {}, 5);
@@ -131,7 +135,8 @@ static float jumpHeight(const World& world, bool hold) {
     const float start = state.position.y;
     float highest = start;
     for (int i = 0; i < 120; ++i) {
-        const PlayerInput input{.jumpPressed = i == 0, .jumpHeld = hold || i == 0};
+        const bool held = releaseAt < 0 || i < releaseAt || i == 0;
+        const PlayerInput input{.jumpPressed = i == 0, .jumpHeld = held};
         step(state, world.map, input, params, kDt);
         highest = std::min(highest, state.position.y);
     }
@@ -141,18 +146,72 @@ static float jumpHeight(const World& world, bool hold) {
     return start - highest;
 }
 
-//a held jump reaches about speed^2 / (2 * gravity) and a released one is shorter
+//a held jump is 3 blocks high and a tap is 1.5 blocks, the numbers come from the params
 static void testJump() {
     World world = makeWorld();
     addFloor(world, 0, 29);
     const PlayerParams params;
 
-    const float expected = params.jumpSpeed * params.jumpSpeed / (2.0f * params.gravity);
-    const float full = jumpHeight(world, true);
-    const float hop = jumpHeight(world, false);
-    CHECK(near(full, expected, 8.0f));
-    CHECK(hop < full * 0.6f);
-    CHECK(hop > 10.0f);
+    CHECK(near(jumpHeight(world, -1), 96.0f, 1.0f));
+    CHECK(near(jumpHeight(world, 0), 48.0f, 1.0f));
+    CHECK(near(jumpHeight(world, -1), params.jumpHeight, 1.0f));
+    CHECK(near(jumpHeight(world, 0), params.tapHeight, 1.0f));
+}
+
+//letting go in the middle of a jump gives something in between, and the rise slows down softly (no sudden stop)
+static void testJumpRelease() {
+    World world = makeWorld();
+    addFloor(world, 0, 29);
+    const PlayerParams params;
+
+    //released later means higher
+    const float early = jumpHeight(world, 4);
+    const float late = jumpHeight(world, 12);
+    CHECK(early > params.tapHeight && late > early && late < params.jumpHeight);
+
+    //the step after the release changes the speed by about two gravities, it is not set to zero
+    PlayerState state = spawnState({3, 10}, params);
+    run(state, world.map, {}, 5);
+    for (int i = 0; i < 8; ++i) {
+        step(state, world.map, {.jumpPressed = i == 0, .jumpHeld = true}, params, kDt);
+    }
+    const float before = state.velocity.y;
+    step(state, world.map, {.jumpHeld = false}, params, kDt);
+    CHECK(before < -100.0f);
+    CHECK(state.velocity.y < 0.0f);
+    CHECK(near(state.velocity.y - before, params.gravity() * params.releaseGravityScale() * kDt, 1.0f));
+}
+
+//can the player run and jump from the floor onto a ledge that is n blocks high? the jump is held or a tap
+static bool canClimb(int blocks, bool hold) {
+    World world = makeWorld();
+    addFloor(world, 0, 29);
+    const int ledgeTop = world.map.height() - 1 - blocks;
+    for (int y = ledgeTop; y < world.map.height() - 1; ++y) {
+        for (int x = 9; x <= 14; ++x) {
+            CHECK(world.map.place(world.ground, {x, y}, world.block).has_value());
+        }
+    }
+
+    const PlayerParams params;
+    PlayerState state = spawnState({6, world.map.height() - 2}, params);
+    run(state, world.map, {}, 5);
+    for (int i = 0; i < 120; ++i) {
+        //it runs for half a second and then stops, so it does not walk off the other side of the ledge
+        const PlayerInput input{.move = i < 30 ? 1.0f : 0.0f, .jumpPressed = i == 0, .jumpHeld = hold || i == 0};
+        step(state, world.map, input, params, kDt);
+    }
+
+    //standing on top of the ledge: the feet are on its top edge
+    return state.onGround && near(state.position.y + params.height, static_cast<float>(ledgeTop * kCellSize));
+}
+
+//a tap clears one block, a held jump clears two, nothing clears four
+static void testLedges() {
+    CHECK(canClimb(1, false));
+    CHECK(!canClimb(2, false));
+    CHECK(canClimb(2, true));
+    CHECK(!canClimb(4, true));
 }
 
 //a tile above the player stops the jump and the player falls back down
@@ -207,7 +266,7 @@ static void testCoyoteTime() {
     //right after leaving, the jump works
     PlayerState early = walkOff();
     step(early, world.map, {.move = 1.0f, .jumpPressed = true, .jumpHeld = true}, params, kDt);
-    CHECK(early.velocity.y < -params.jumpSpeed * 0.5f);
+    CHECK(early.velocity.y < -params.jumpSpeed() * 0.5f);
 
     //a quarter of a second later it is too late
     PlayerState late = walkOff();
@@ -241,7 +300,7 @@ static void testJumpBuffer() {
     bool jumped = false;
     for (int i = 0; i <= landing + 3; ++i) {
         step(near_, world.map, {.jumpPressed = i == landing - 3, .jumpHeld = true}, params, kDt);
-        jumped = jumped || near_.velocity.y < -params.jumpSpeed * 0.5f;
+        jumped = jumped || near_.velocity.y < -params.jumpSpeed() * 0.5f;
     }
     CHECK(jumped);
 
@@ -250,7 +309,7 @@ static void testJumpBuffer() {
     bool farJumped = false;
     for (int i = 0; i <= landing + 3; ++i) {
         step(far_, world.map, {.jumpPressed = i == 0, .jumpHeld = true}, params, kDt);
-        farJumped = farJumped || far_.velocity.y < -params.jumpSpeed * 0.5f;
+        farJumped = farJumped || far_.velocity.y < -params.jumpSpeed() * 0.5f;
     }
     CHECK(!farJumped);
 }
@@ -324,6 +383,8 @@ int main() {
     testRunAndWalls();
     testFriction();
     testJump();
+    testJumpRelease();
+    testLedges();
     testCeiling();
     testNonSolidLayer();
     testCoyoteTime();

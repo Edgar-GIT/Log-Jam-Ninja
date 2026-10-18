@@ -64,7 +64,7 @@ void updateJump(PlayerState& state, const PlayerInput& input, const PlayerParams
     state.coyoteLeft = state.onGround ? params.coyoteTime : std::max(0.0f, state.coyoteLeft - dt);
 
     if (state.jumpBufferLeft > 0.0f && state.coyoteLeft > 0.0f) {
-        state.velocity.y = -params.jumpSpeed;
+        state.velocity.y = -params.jumpSpeed();
         state.onGround = false;
 
         //both timers are used up, so one press gives one jump
@@ -73,10 +73,17 @@ void updateJump(PlayerState& state, const PlayerInput& input, const PlayerParams
     }
 }
 
-//gravity: stronger while rising with the button released, and limited by the maximum fall speed
+//gravity has three strengths: normal while rising with the button held, stronger while rising with the button
+//released (the jump ends softly, the speed is not cut at once), and the fall one while going down
 void applyGravity(PlayerState& state, const PlayerInput& input, const PlayerParams& params, float dt) noexcept {
-    const bool shortHop = state.velocity.y < 0.0f && !input.jumpHeld;
-    const float gravity = params.gravity * (shortHop ? params.shortHopGravity : 1.0f);
+    float gravity = params.gravity();
+    if (state.velocity.y < 0.0f) {
+        if (!input.jumpHeld) {
+            gravity *= params.releaseGravityScale();
+        }
+    } else {
+        gravity *= params.fallGravityScale;
+    }
     state.velocity.y = std::min(state.velocity.y + gravity * dt, params.maxFall);
 }
 

@@ -14,11 +14,14 @@ struct Vec2 {
     float y{0.0f};
 };
 
+//the game logic always runs in steps of this many seconds (the jump maths below needs to know it)
+inline constexpr float kLogicStep = 1.0f / 60.0f;
+
 //every number that decides how the player feels, easy to tweak
 struct PlayerParams {
-    //size of the body, in pixels
-    float width{24.0f};
-    float height{48.0f};
+    //size of the hitbox, in pixels (the sprite is 64x64, the hitbox sits inside it, feet on the same line)
+    float width{56.0f};
+    float height{56.0f};
 
     //horizontal movement: top speed and how fast the speed changes (pixels per second, per second)
     float runSpeed{240.0f};
@@ -27,19 +30,36 @@ struct PlayerParams {
     float airAccel{1500.0f};
     float airFriction{600.0f};
 
-    //vertical movement
-    float gravity{1700.0f};
+    //jump, described by what the player sees: how high it goes and how long it takes to reach the top
+    //jumpHeight is with the button held, tapHeight is a tap (button released at once), both in pixels
+    //(3 blocks = 96 and 1.5 blocks = 48 with blocks of 32 pixels)
+    float jumpHeight{96.0f};
+    float tapHeight{48.0f};
+    float apexTime{0.34f};
+
+    //the fall: the maximum speed, and how much stronger gravity is while falling
     float maxFall{900.0f};
-
-    //jump speed: the jump height is speed * speed / (2 * gravity), about 106 pixels with these numbers
-    float jumpSpeed{600.0f};
-
-    //gravity is multiplied by this while the player rises with the jump button released (short hop)
-    float shortHopGravity{2.6f};
+    float fallGravityScale{1.0f};
 
     //forgiveness: a jump still works this long after leaving a ledge, and a press this long before landing still counts
     float coyoteTime{0.10f};
     float jumpBuffer{0.12f};
+
+    //the numbers the physics really uses, worked out from the ones above
+
+    //a step of the simulation moves the player a bit less than the smooth curve, so the curve is made a little
+    //taller to make the jump reach exactly jumpHeight
+    [[nodiscard]] constexpr float curveHeight() const noexcept { return jumpHeight / (1.0f - kLogicStep / apexTime); }
+
+    //upward gravity (pixels per second, per second) and the speed at the start of the jump
+    [[nodiscard]] constexpr float gravity() const noexcept { return 2.0f * curveHeight() / (apexTime * apexTime); }
+    [[nodiscard]] constexpr float jumpSpeed() const noexcept { return 2.0f * curveHeight() / apexTime; }
+
+    //gravity is multiplied by this while rising with the button released, so a tap ends at tapHeight
+    //(the first step of a jump still has normal gravity, so a little height is taken off the target)
+    [[nodiscard]] constexpr float releaseGravityScale() const noexcept {
+        return jumpHeight / (tapHeight - 0.25f * kLogicStep * jumpSpeed());
+    }
 };
 
 //what the player asked for in this step

@@ -376,6 +376,33 @@ static void testCheckpointsAndRespawn() {
     CHECK(respawnCell(bare.map, std::nullopt) == Cell{1, 1});
 }
 
+//the right edge of the map is the goal: running there reaches it, standing at the start does not
+static void testGoal() {
+    World world = makeWorld();
+    addFloor(world, 0, 29);
+    const PlayerParams params;
+
+    PlayerState state = spawnState({2, 10}, params);
+    CHECK(!reachedGoal(state, world.map, params));
+    run(state, world.map, {.move = 1.0f}, 20);
+    CHECK(!reachedGoal(state, world.map, params));
+
+    //it stops at the edge of the map and counts as reached
+    run(state, world.map, {.move = 1.0f}, 600);
+    CHECK(reachedGoal(state, world.map, params));
+    CHECK(near(state.position.x + params.width, 30.0f * 32.0f));
+
+    //a wall before the edge blocks the way, so the goal is not reached
+    World walled = makeWorld();
+    addFloor(walled, 0, 29);
+    for (int y = 8; y <= 10; ++y) {
+        CHECK(walled.map.place(walled.ground, {20, y}, walled.block).has_value());
+    }
+    PlayerState blocked = spawnState({2, 10}, params);
+    run(blocked, walled.map, {.move = 1.0f}, 600);
+    CHECK(!reachedGoal(blocked, walled.map, params));
+}
+
 //runs every test, any failed CHECK ends the program with exit code 1
 int main() {
     testLanding();
@@ -392,5 +419,6 @@ int main() {
     testNoAutoJump();
     testFellOutOfMap();
     testCheckpointsAndRespawn();
+    testGoal();
     std::println("all player tests passed");
 }

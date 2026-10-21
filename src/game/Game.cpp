@@ -1,16 +1,16 @@
-// Game.cpp - implementation of the game loop: load a map, run and jump through it, checkpoints and respawn.
+// Game.cpp - the game loop: the window, the levels, the files of the user and the switch between the scenes.
 
 #include "Game.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <format>
-#include <iterator>
-#include <string>
 #include <utility>
-#include "LevelRenderer.hpp"
+#include "Style.hpp"
 #include "assets/AssetPath.hpp"
 #include "io/MapSerializer.hpp"
+#include "util/TimeFormat.hpp"
+#include "util/UserDir.hpp"
 
 namespace ljn {
 namespace {
@@ -18,62 +18,11 @@ namespace {
 //one logic step is 1/60 of a second
 constexpr double kStep = 1.0 / 60.0;
 
-//the longest frame we accept, after a freeze (window drag, file dialog) the game does not try to catch up
+//the longest frame we accept, after a freeze the game does not try to catch up
 constexpr double kMaxFrame = 0.25;
 
-//how fast the free camera moves, in pixels of the picture per second
-constexpr float kFreeCameraSpeed = 420.0f;
-
-//how quickly the camera catches up with the player (bigger is faster), and where the player sits vertically
-constexpr float kCameraFollow = 8.0f;
-constexpr float kPlayerScreenHeight = 0.58f;
-
+//how long a message stays at the bottom of the screen
 constexpr double kStatusSeconds = 5.0;
-
-constexpr Color kSky{70, 110, 160, 255};
-constexpr Color kTextColor{235, 235, 240, 255};
-constexpr Color kErrorColor{255, 110, 110, 255};
-constexpr Color kShade{0, 0, 0, 150};
-
-constexpr Color kPlayerBody{240, 150, 40, 255};
-constexpr Color kPlayerBand{60, 40, 30, 255};
-constexpr Color kPlayerEye{255, 255, 255, 255};
-constexpr Color kHitbox{80, 255, 120, 255};
-constexpr Color kSpriteFrame{255, 220, 80, 255};
-constexpr Color kSpawnColor{70, 210, 100, 255};
-constexpr Color kCheckpointOff{70, 120, 190, 255};
-constexpr Color kCheckpointOn{110, 220, 255, 255};
-constexpr Color kPole{235, 235, 240, 255};
-
-//the player sprite is 64x64, the hitbox sits inside it with the feet on the bottom line
-constexpr int kSpriteSize = 64;
-
-//one row of the tuning panel: a number of PlayerParams, how much one key press changes it, and its limits
-struct Tunable {
-    const char* name;
-    float PlayerParams::* field;
-    float step;
-    float min;
-    float max;
-};
-
-constexpr Tunable kTunables[] = {
-    {"hitbox width", &PlayerParams::width, 2.0f, 16.0f, 64.0f},
-    {"hitbox height", &PlayerParams::height, 2.0f, 16.0f, 64.0f},
-    {"run speed", &PlayerParams::runSpeed, 10.0f, 60.0f, 700.0f},
-    {"ground accel", &PlayerParams::groundAccel, 100.0f, 200.0f, 6000.0f},
-    {"ground friction", &PlayerParams::groundFriction, 100.0f, 200.0f, 6000.0f},
-    {"air accel", &PlayerParams::airAccel, 100.0f, 100.0f, 6000.0f},
-    {"air friction", &PlayerParams::airFriction, 100.0f, 0.0f, 6000.0f},
-    {"jump height", &PlayerParams::jumpHeight, 4.0f, 16.0f, 300.0f},
-    {"tap height", &PlayerParams::tapHeight, 4.0f, 8.0f, 300.0f},
-    {"apex time", &PlayerParams::apexTime, 0.01f, 0.10f, 1.00f},
-    {"fall gravity x", &PlayerParams::fallGravityScale, 0.05f, 0.5f, 4.0f},
-    {"max fall speed", &PlayerParams::maxFall, 25.0f, 200.0f, 1400.0f},
-    {"coyote time", &PlayerParams::coyoteTime, 0.01f, 0.0f, 0.4f},
-    {"jump buffer", &PlayerParams::jumpBuffer, 0.01f, 0.0f, 0.4f},
-};
-constexpr int kTunableCount = static_cast<int>(std::size(kTunables));
 
 //a folder that is not found is a real problem, the game cannot work without it
 std::filesystem::path assetsOrDie(const std::filesystem::path& executableDir) {
@@ -85,30 +34,30 @@ std::filesystem::path assetsOrDie(const std::filesystem::path& executableDir) {
     return *found;
 }
 
-//a small flag standing on the bottom of a cell, x and y are the top-left corner of the cell on the screen
-void drawFlag(int x, int y, Color color) {
-    DrawRectangle(x + 6, y + 3, 3, 29, kPole);
-    DrawTriangle({static_cast<float>(x + 9), static_cast<float>(y + 3)},
-                 {static_cast<float>(x + 9), static_cast<float>(y + 15)},
-                 {static_cast<float>(x + 27), static_cast<float>(y + 9)}, color);
-}
-
-//true if any of the keys is down
-bool anyDown(std::initializer_list<int> keys) {
-    return std::ranges::any_of(keys, [](int key) { return IsKeyDown(key); });
-}
-
-//true if any of the keys went down in this frame
-bool anyPressed(std::initializer_list<int> keys) {
-    return std::ranges::any_of(keys, [](int key) { return IsKeyPressed(key); });
-}
-
 }  //anonymous namespace
 
-Game::Game(const std::filesystem::path& executableDir, const std::filesystem::path& mapPath)
-    : m_screen("Log Jam Ninja"), m_assets(assetsOrDie(executableDir)) {
+Game::Game(const std::filesystem::path& executableDir, const std::filesystem::path& mapPath, bool unlockAll)
+    : m_screen("Log Jam Ninja", false, true, true), m_assets(assetsOrDie(executableDir)), m_unlockAll(unlockAll) {
+    //the settings and the save data live in the folder of the user
+    const std::filesystem::path userDir = userDataDir(executableDir);
+    m_settingsFile = userDir / "settings.json";
+    m_progressFile = userDir / "progress.json";
+
+    loadUserFiles();
+    applyVideoSettings();
+
+    //the levels of the game are the map files of the assets folder
+    m_levelsFolder = m_assets.root() / "maps";
+    m_levels = scanLevels(m_levelsFolder);
+
+    buildTitleMenu();
+
+    //a map given in the command line starts right away
     if (!mapPath.empty()) {
-        loadLevel(mapPath);
+        m_levelId = mapPath.stem().string();
+        if (loadLevel(mapPath)) {
+            m_scenes.reset(Scene::Playing);
+        }
     }
 }
 
@@ -116,7 +65,7 @@ void Game::run() {
     //the accumulator holds the time that was not simulated yet
     double accumulator = 0.0;
 
-    while (!WindowShouldClose()) {
+    while (!WindowShouldClose() && !m_quit) {
         readInput();
 
         accumulator += std::min(static_cast<double>(GetFrameTime()), kMaxFrame);
@@ -129,296 +78,176 @@ void Game::run() {
 }
 
 void Game::readInput() {
-    //window keys: F11 fullscreen, F10 whole-number scale on or off
-    if (IsKeyPressed(KEY_F11)) {
-        m_screen.toggleFullscreen();
+    m_input.update(m_settings.keys);
+
+    //the window keys: F11 fullscreen, F10 whole number scale
+    if (m_input.keyPressed(KEY_F11)) {
+        m_settings.video.fullscreen = !m_settings.video.fullscreen;
+        applyVideoSettings();
     }
-    if (IsKeyPressed(KEY_F10)) {
-        m_screen.toggleIntegerScale();
+    if (m_input.keyPressed(KEY_F10)) {
+        m_settings.video.integerScale = !m_settings.video.integerScale;
+        applyVideoSettings();
     }
 
-    //debug keys: F3 text, F4 hitbox, F2 free camera, R respawn
-    if (IsKeyPressed(KEY_F3)) {
-        m_showDebug = !m_showDebug;
-    }
-    if (IsKeyPressed(KEY_F4)) {
-        m_showHitbox = !m_showHitbox;
-    }
-    if (IsKeyPressed(KEY_F2)) {
-        m_freeCamera = !m_freeCamera;
-    }
-    if (IsKeyPressed(KEY_R) && m_level && !m_freeCamera) {
-        respawn();
-    }
-
-    //a map file dropped on the window is loaded
-    if (IsFileDropped()) {
-        const FilePathList dropped = LoadDroppedFiles();
-        if (dropped.count > 0) {
-            loadLevel(dropped.paths[0]);
-        }
-        UnloadDroppedFiles(dropped);
-    }
-
-    //F5 tuning panel keys
-    handleTuningKeys();
-
-    //movement: arrows or A and D, jump: space, up, W, Z or K
-    const bool left = anyDown({KEY_LEFT, KEY_A});
-    const bool right = anyDown({KEY_RIGHT, KEY_D});
-    const bool up = anyDown({KEY_UP, KEY_W});
-    const bool down = anyDown({KEY_DOWN, KEY_S});
-    m_axis = {static_cast<float>(right) - static_cast<float>(left), static_cast<float>(down) - static_cast<float>(up)};
-
-    m_input.move = m_axis.x;
-    m_input.jumpHeld = anyDown({KEY_SPACE, KEY_UP, KEY_W, KEY_Z, KEY_K});
-
-    //the press waits here until a logic step uses it
-    if (anyPressed({KEY_SPACE, KEY_UP, KEY_W, KEY_Z, KEY_K})) {
+    //a jump press waits for a logic step (a frame can end without one, the press must not be lost)
+    if (m_input.pressed(Action::Jump)) {
         m_jumpQueued = true;
     }
-}
 
-void Game::handleTuningKeys() {
-    if (IsKeyPressed(KEY_F5)) {
-        m_showTuning = !m_showTuning;
-    }
-    if (!m_showTuning) {
-        return;
-    }
-
-    //tab (or shift+tab) selects a row
-    const bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-    if (IsKeyPressed(KEY_TAB)) {
-        m_tuneIndex = (m_tuneIndex + (shift ? kTunableCount - 1 : 1)) % kTunableCount;
-    }
-
-    //page up and page down change the value (hold shift for tiny steps), holding the key repeats
-    int direction = 0;
-    if (IsKeyPressed(KEY_PAGE_UP) || IsKeyPressedRepeat(KEY_PAGE_UP)) {
-        direction = 1;
-    } else if (IsKeyPressed(KEY_PAGE_DOWN) || IsKeyPressedRepeat(KEY_PAGE_DOWN)) {
-        direction = -1;
-    }
-    if (direction != 0) {
-        const Tunable& row = kTunables[m_tuneIndex];
-        const float oldWidth = m_params.width;
-        const float oldHeight = m_params.height;
-
-        float& value = m_params.*row.field;
-        value = std::clamp(value + static_cast<float>(direction) * row.step * (shift ? 0.1f : 1.0f), row.min, row.max);
-
-        //a tap can never be higher than the full jump
-        m_params.tapHeight = std::min(m_params.tapHeight, m_params.jumpHeight);
-
-        //a new hitbox size keeps the feet and the center where they were
-        m_player.position.x += (oldWidth - m_params.width) * 0.5f;
-        m_player.position.y += oldHeight - m_params.height;
-    }
-
-    //F7 goes back to the default numbers
-    if (IsKeyPressed(KEY_F7)) {
-        m_params = PlayerParams{};
-        setStatus("Player params reset", false);
-    }
-
-    //F6 copies the numbers as C++ code, ready to paste into PlayerParams
-    if (IsKeyPressed(KEY_F6)) {
-        std::string text = "PlayerParams{\n";
-        text += std::format(
-            "    .width = {:.3f}f, .height = {:.3f}f,\n"
-            "    .runSpeed = {:.3f}f, .groundAccel = {:.3f}f, .groundFriction = {:.3f}f,\n"
-            "    .airAccel = {:.3f}f, .airFriction = {:.3f}f,\n"
-            "    .jumpHeight = {:.3f}f, .tapHeight = {:.3f}f, .apexTime = {:.3f}f,\n"
-            "    .maxFall = {:.3f}f, .fallGravityScale = {:.3f}f,\n"
-            "    .coyoteTime = {:.3f}f, .jumpBuffer = {:.3f}f}};\n",
-            m_params.width, m_params.height, m_params.runSpeed, m_params.groundAccel, m_params.groundFriction,
-            m_params.airAccel, m_params.airFriction, m_params.jumpHeight, m_params.tapHeight, m_params.apexTime,
-            m_params.maxFall, m_params.fallGravityScale, m_params.coyoteTime, m_params.jumpBuffer);
-        SetClipboardText(text.c_str());
-        setStatus("Player params copied to the clipboard", false);
+    //the keys of the scene that is on top
+    switch (m_scenes.current()) {
+        case Scene::Title:         handleTitleKeys(); break;
+        case Scene::LevelSelect:   handleLevelSelectKeys(); break;
+        case Scene::Settings:      handleSettingsKeys(); break;
+        case Scene::Controls:      handleControlsKeys(); break;
+        case Scene::Playing:       handlePlayingKeys(); break;
+        case Scene::Paused:        handlePausedKeys(); break;
+        case Scene::LevelComplete: handleLevelCompleteKeys(); break;
     }
 }
 
 void Game::update(float dt) {
-    if (!m_level) {
-        return;
+    //the level is the only scene with logic that runs in steps
+    if (m_scenes.current() == Scene::Playing) {
+        updatePlaying(dt);
     }
-
-    //free camera: no player, just look around
-    if (m_freeCamera) {
-        m_camera.x += m_axis.x * kFreeCameraSpeed * dt;
-        m_camera.y += m_axis.y * kFreeCameraSpeed * dt;
-        m_camera = clampCamera(m_level->map, m_camera, Screen::kWidth, Screen::kHeight);
-        return;
-    }
-
-    //this step uses the queued jump press, so one press is one jump
-    PlayerInput input = m_input;
-    input.jumpPressed = m_jumpQueued;
-    m_jumpQueued = false;
-    step(m_player, m_level->map, input, m_params, dt);
-
-    //touching a checkpoint further ahead makes it the new respawn point (going back does not undo progress)
-    const auto touched = checkpointTouched(m_player, m_level->map, m_params);
-    if (touched && (!m_checkpoint || *touched > *m_checkpoint)) {
-        m_checkpoint = touched;
-        setStatus(std::format("Checkpoint {}", *touched + 1), false);
-    }
-
-    //falling out of the map is a death
-    if (fellOutOfMap(m_player, m_level->map)) {
-        ++m_deaths;
-        respawn();
-    }
-
-    followPlayer(dt);
-}
-
-void Game::followPlayer(float dt) {
-    //where the camera wants to be: the player in the middle, a bit lower than the center
-    const Vector2 target{m_player.position.x + m_params.width * 0.5f - static_cast<float>(Screen::kWidth) * 0.5f,
-                         m_player.position.y + m_params.height * 0.5f - static_cast<float>(Screen::kHeight) * kPlayerScreenHeight};
-
-    //exponential smoothing: the same feel at any step size
-    const float blend = 1.0f - std::exp(-kCameraFollow * dt);
-    m_camera.x += (target.x - m_camera.x) * blend;
-    m_camera.y += (target.y - m_camera.y) * blend;
-    m_camera = clampCamera(m_level->map, m_camera, Screen::kWidth, Screen::kHeight);
-}
-
-void Game::respawn() {
-    m_player = spawnState(respawnCell(m_level->map, m_checkpoint), m_params);
-    m_jumpQueued = false;
-
-    //the camera jumps to the player, so there is no long slide across the level
-    m_camera = {m_player.position.x + m_params.width * 0.5f - static_cast<float>(Screen::kWidth) * 0.5f,
-                m_player.position.y + m_params.height * 0.5f - static_cast<float>(Screen::kHeight) * kPlayerScreenHeight};
-    m_camera = clampCamera(m_level->map, m_camera, Screen::kWidth, Screen::kHeight);
 }
 
 void Game::draw() {
     m_screen.beginPicture();
-    ClearBackground(kSky);
+    ClearBackground(style::kBackground);
 
-    if (m_level) {
-        m_level->tiles.setTime(GetTime());
-        const Map& map = m_level->map;
-
-        //layers behind the player, then the markers and the player, then the layers in front of it
-        const int split = playerLayer(map);
-        drawLayers(map, m_level->tiles, m_camera, Screen::kWidth, Screen::kHeight, 0, split);
-        drawMarkers(m_camera);
-        drawPlayer(m_camera);
-        drawLayers(map, m_level->tiles, m_camera, Screen::kWidth, Screen::kHeight, split + 1, map.layerCount() - 1);
-    } else {
-        DrawText("Drop a map file (.json) on the window", 40, Screen::kHeight / 2 - 20, 20, kTextColor);
-        DrawText("or start the game with: log-jam-ninja path/to/map.json", 40, Screen::kHeight / 2 + 10, 20,
-                 kTextColor);
+    switch (m_scenes.current()) {
+        case Scene::Title:         drawTitle(); break;
+        case Scene::LevelSelect:   drawLevelSelect(); break;
+        case Scene::Settings:      drawSettings(); break;
+        case Scene::Controls:      drawControls(); break;
+        case Scene::Playing:       drawPlaying(); break;
+        case Scene::Paused:        drawPaused(); break;
+        case Scene::LevelComplete: drawLevelComplete(); break;
     }
 
-    //debug text in the corner
-    if (m_showDebug) {
-        DrawRectangle(0, 0, 360, 134, kShade);
-        DrawText(std::format("fps {}  scale {:.2f}x{}", GetFPS(), m_screen.scale(), m_freeCamera ? "  FREE CAM" : "").c_str(),
-                 8, 6, 20, kTextColor);
-        DrawText(std::format("player {:.0f}, {:.0f}  {}", m_player.position.x, m_player.position.y,
-                             m_player.onGround ? "ground" : "air").c_str(), 8, 30, 20, kTextColor);
-        DrawText(std::format("speed {:.0f}, {:.0f}", m_player.velocity.x, m_player.velocity.y).c_str(), 8, 54, 20, kTextColor);
-        DrawText(std::format("checkpoint {}  deaths {}", m_checkpoint ? *m_checkpoint + 1 : 0, m_deaths).c_str(), 8, 78, 20,
-                 kTextColor);
-        const int missingTiles = m_level ? m_level->tiles.missingCount() : 0;
-        DrawText(std::format("missing sprites {}  tiles {}", m_assets.missing().size(), missingTiles).c_str(), 8, 102, 20,
-                 kTextColor);
-    }
-
-    if (m_showTuning) {
-        drawTuning();
-    }
-
-    //the status message
+    //the status message, at the bottom of everything
     if (!m_status.empty() && GetTime() < m_statusUntil) {
-        DrawRectangle(0, Screen::kHeight - 34, Screen::kWidth, 34, kShade);
-        DrawText(m_status.c_str(), 8, Screen::kHeight - 28, 20, m_statusError ? kErrorColor : kTextColor);
+        DrawRectangle(0, Screen::kHeight - 34, Screen::kWidth, 34, style::kPanel);
+        DrawText(m_status.c_str(), 8, Screen::kHeight - 28, style::kItemSize,
+                 m_statusError ? style::kBad : style::kText);
     }
 
     m_screen.endPicture();
     m_screen.present();
 }
 
-void Game::drawMarkers(const Vector2& camera) const {
-    //entities use the same whole-pixel camera as the layers with parallax 1
-    const auto cameraX = static_cast<int>(std::floor(camera.x));
-    const auto cameraY = static_cast<int>(std::floor(camera.y));
-    const Map& map = m_level->map;
-
-    if (map.hasSpawn()) {
-        drawFlag(map.spawn().x * kCellSize - cameraX, map.spawn().y * kCellSize - cameraY, kSpawnColor);
-    }
-    const auto checkpoints = map.checkpoints();
-    for (std::size_t i = 0; i < checkpoints.size(); ++i) {
-        //the checkpoints already reached are bright
-        const bool reached = m_checkpoint && static_cast<int>(i) <= *m_checkpoint;
-        drawFlag(checkpoints[i].x * kCellSize - cameraX, checkpoints[i].y * kCellSize - cameraY,
-                 reached ? kCheckpointOn : kCheckpointOff);
-    }
+MenuInput Game::menuInput() const {
+    return {.up = m_input.menuUp(),
+            .down = m_input.menuDown(),
+            .left = m_input.menuLeft(),
+            .right = m_input.menuRight(),
+            .confirm = m_input.menuConfirm(),
+            .back = m_input.menuBack()};
 }
 
-void Game::drawTuning() const {
-    //a panel on the right side, one row for each number
-    constexpr int kPanelWidth = 340;
-    constexpr int kRowHeight = 22;
-    const int x = Screen::kWidth - kPanelWidth;
-    const int height = 30 + kTunableCount * kRowHeight + 6 * kRowHeight / 2 + 16;
-    DrawRectangle(x, 0, kPanelWidth, height, kShade);
-    DrawText("PLAYER TUNING", x + 8, 6, 20, kHitbox);
+MenuEvent Game::updateMouse(Menu& menu, const Rectangle& area) {
+    //nothing to do if the mouse did not move and no button was pressed
+    if (!m_input.mouseMoved() && !m_input.mousePressed()) {
+        return {};
+    }
 
-    for (int i = 0; i < kTunableCount; ++i) {
-        const Tunable& row = kTunables[i];
-        const int y = 30 + i * kRowHeight;
-        const bool selected = i == m_tuneIndex;
-        if (selected) {
-            DrawRectangle(x + 4, y - 1, kPanelWidth - 8, kRowHeight, Color{255, 255, 255, 40});
+    const Vector2 mouse = m_screen.toPicture(m_input.mousePosition());
+    const int index = m_menuView.itemAt(menu, mouse, area);
+    if (index < 0) {
+        return {};
+    }
+
+    //the item under the mouse becomes the one under the cursor
+    if (m_input.mouseMoved()) {
+        menu.hover(index);
+    }
+    if (m_input.mousePressed()) {
+        return menu.click(index, m_menuView.sliderFraction(menu, index, mouse, area));
+    }
+    return {};
+}
+
+void Game::buildTitleMenu() {
+    m_titleMenu.clear();
+    m_titleMenu.add(Menu::button(kTitlePlay, "Play"));
+    m_titleMenu.add(Menu::button(kTitleLevels, "Levels"));
+    m_titleMenu.add(Menu::button(kTitleControls, "Controls"));
+    m_titleMenu.add(Menu::button(kTitleSettings, "Settings"));
+    m_titleMenu.add(Menu::button(kTitleQuit, "Quit"));
+}
+
+void Game::buildLevelMenu() {
+    m_levelMenu.clear();
+    m_levelMenu.add(Menu::label("CHOOSE A LEVEL"));
+
+    for (std::size_t i = 0; i < m_levels.size(); ++i) {
+        const LevelEntry& entry = m_levels[i];
+        MenuItem item = Menu::button(kLevelFirst + static_cast<int>(i), entry.name);
+
+        if (!isUnlocked(m_levels, m_progress, i, m_unlockAll)) {
+            item.enabled = false;
+            item.detail = "locked";
+        } else if (const LevelRecord* record = m_progress.find(entry.id); record != nullptr && record->completed) {
+            item.detail = formatTime(record->bestTime);
+        } else {
+            item.detail = "not finished";
         }
-        const Color color = selected ? kHitbox : kTextColor;
-        DrawText(row.name, x + 8, y, 20, color);
-        DrawText(std::format("{:.2f}", m_params.*row.field).c_str(), x + 210, y, 20, color);
+        m_levelMenu.add(item);
     }
 
-    //the numbers the physics works out from the ones above, and the keys
-    const int infoY = 30 + kTunableCount * kRowHeight + 6;
-    DrawText(std::format("gravity {:.0f}  jump speed {:.0f}", m_params.gravity(), m_params.jumpSpeed()).c_str(), x + 8,
-             infoY, 20, kTextColor);
-    DrawText("Tab select   PgUp/PgDn change", x + 8, infoY + 24, 10, kTextColor);
-    DrawText("Shift: tiny steps   F6 copy code   F7 reset", x + 8, infoY + 38, 10, kTextColor);
+    m_levelMenu.add(Menu::button(kLevelBack, "Back"));
 }
 
-void Game::drawPlayer(const Vector2& camera) const {
-    const auto x = static_cast<int>(std::floor(m_player.position.x - std::floor(camera.x)));
-    const auto y = static_cast<int>(std::floor(m_player.position.y - std::floor(camera.y)));
-    const auto width = static_cast<int>(m_params.width);
-    const auto height = static_cast<int>(m_params.height);
+void Game::buildSettingsMenu() {
+    m_settingsMenu.clear();
+    m_settingsMenu.add(Menu::label("SETTINGS"));
+    m_settingsMenu.add(Menu::toggle(kSettingsFullscreen, "Fullscreen", m_settings.video.fullscreen));
+    m_settingsMenu.add(Menu::toggle(kSettingsIntegerScale, "Whole number scale", m_settings.video.integerScale));
+    m_settingsMenu.add(Menu::toggle(kSettingsVsync, "Limit to 60 fps", m_settings.video.vsync));
+    m_settingsMenu.add(Menu::toggle(kSettingsShowFps, "Show the fps", m_settings.video.showFps));
+    m_settingsMenu.add(Menu::slider(kSettingsMaster, "Master volume", m_settings.audio.master, 0, kMaxVolume, 5));
+    m_settingsMenu.add(Menu::slider(kSettingsMusic, "Music", m_settings.audio.music, 0, kMaxVolume, 5));
+    m_settingsMenu.add(Menu::slider(kSettingsSfx, "Effects", m_settings.audio.sfx, 0, kMaxVolume, 5));
+    m_settingsMenu.add(Menu::button(kSettingsBack, "Back"));
+}
 
-    //the body fills the hitbox, a dark band for the head, and one eye on the side the player looks at
-    DrawRectangle(x, y, width, height, kPlayerBody);
-    DrawRectangle(x, y + 12, width, 8, kPlayerBand);
-    const int eyeX = m_player.facing > 0 ? x + width - 18 : x + 10;
-    DrawRectangle(eyeX, y + 24, 8, 8, kPlayerEye);
+void Game::buildControlsMenu() {
+    m_controlsMenu.clear();
+    m_controlsMenu.add(Menu::label("CONTROLS"));
 
-    if (m_showHitbox) {
-        //the 64x64 sprite frame: centered on the hitbox, feet on the same line
-        const int spriteX = x - (kSpriteSize - width) / 2;
-        const int spriteY = y + height - kSpriteSize;
-        DrawRectangleLines(spriteX, spriteY, kSpriteSize, kSpriteSize, kSpriteFrame);
-        DrawRectangleLines(x, y, width, height, kHitbox);
+    for (const Action action : kAllActions) {
+        MenuItem item = Menu::button(kControlAction + static_cast<int>(action), std::string{actionName(action)});
+        item.detail = keyName(m_settings.keys.key(action, 0)) + "   " + keyName(m_settings.keys.key(action, 1));
+        m_controlsMenu.add(item);
     }
+
+    m_controlsMenu.add(Menu::button(kControlReset, "Default keys"));
+    m_controlsMenu.add(Menu::button(kControlBack, "Back"));
 }
 
-void Game::loadLevel(const std::filesystem::path& path) {
+void Game::buildPauseMenu() {
+    m_pauseMenu.clear();
+    m_pauseMenu.add(Menu::button(kPauseResume, "Resume"));
+    m_pauseMenu.add(Menu::button(kPauseRestart, "Restart level"));
+    m_pauseMenu.add(Menu::button(kPauseLevels, "Levels"));
+    m_pauseMenu.add(Menu::button(kPauseTitle, "Title"));
+}
+
+void Game::buildCompleteMenu() {
+    m_completeMenu.clear();
+    m_completeMenu.add(Menu::button(kCompleteNext, "Next level"));
+    m_completeMenu.add(Menu::button(kCompleteLevels, "Levels"));
+    m_completeMenu.add(Menu::button(kCompleteTitle, "Title"));
+}
+
+bool Game::loadLevel(const std::filesystem::path& path) {
     auto loaded = loadFromFile(path);
     if (!loaded) {
         setStatus(std::format("Could not open {}: {}", path.filename().string(), describe(loaded.error())), true);
-        return;
+        return false;
     }
 
     //the new level replaces the old one (the old images are unloaded when it is destroyed)
@@ -426,12 +255,75 @@ void Game::loadLevel(const std::filesystem::path& path) {
     m_level.emplace(std::move(*loaded), path);
     m_level->tiles.load(m_level->map, m_assets.root());
 
-    //a fresh start: no checkpoint, no deaths, the player at the spawn point
+    //a fresh start: no checkpoint, no deaths, the clock at zero
     m_checkpoint.reset();
     m_deaths = 0;
+    m_runTime = 0.0;
+    m_jumpQueued = false;
     m_freeCamera = false;
     respawn();
-    setStatus(std::format("Opened {}", path.filename().string()), false);
+    return true;
+}
+
+void Game::startLevel(std::size_t index) {
+    if (index >= m_levels.size()) {
+        return;
+    }
+
+    const LevelEntry& entry = m_levels[index];
+    m_levelId = entry.id;
+    m_levelIndex = index;
+    if (!loadLevel(entry.path)) {
+        return;
+    }
+    m_scenes.reset(Scene::Playing);
+}
+
+void Game::restartLevel() {
+    if (!m_level) {
+        return;
+    }
+    const std::filesystem::path path = m_level->file;
+    m_checkpoint.reset();
+    m_deaths = 0;
+    m_runTime = 0.0;
+    respawn();
+    m_scenes.reset(Scene::Playing);
+    setStatus(std::format("Restarted {}", path.filename().string()), false);
+}
+
+void Game::loadUserFiles() {
+    const LoadedSettings settings = loadSettings(m_settingsFile);
+    m_settings = settings.settings;
+    if (!settings.problem.empty()) {
+        TraceLog(LOG_WARNING, "SETTINGS: %s", settings.problem.c_str());
+    }
+
+    const LoadedProgress progress = loadProgress(m_progressFile);
+    m_progress = progress.progress;
+    if (!progress.problem.empty()) {
+        TraceLog(LOG_WARNING, "PROGRESS: %s", progress.problem.c_str());
+    }
+}
+
+void Game::saveSettings() {
+    //the free function of the core, not this one
+    if (const auto saved = ljn::saveSettings(m_settingsFile, m_settings); !saved) {
+        setStatus(std::format("Could not save the settings: {}", saved.error()), true);
+    }
+}
+
+void Game::saveProgress() {
+    //the free function of the core, not this one
+    if (const auto saved = ljn::saveProgress(m_progressFile, m_progress); !saved) {
+        setStatus(std::format("Could not save the progress: {}", saved.error()), true);
+    }
+}
+
+void Game::applyVideoSettings() {
+    m_screen.setFullscreen(m_settings.video.fullscreen);
+    m_screen.setVsync(m_settings.video.vsync);
+    m_screen.setIntegerScale(m_settings.video.integerScale);
 }
 
 void Game::setStatus(std::string text, bool error) {

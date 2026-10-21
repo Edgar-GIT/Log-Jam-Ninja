@@ -158,6 +158,11 @@ bool fellOutOfMap(const PlayerState& state, const Map& map) noexcept {
     return state.position.y > static_cast<float>(map.height()) * kCell + kCell * 2.0f;
 }
 
+bool reachedGoal(const PlayerState& state, const Map& map, const PlayerParams& params) noexcept {
+    //one pixel of tolerance, the player stops exactly at the edge but floats can be a little off
+    return state.position.x + params.width >= static_cast<float>(map.width()) * kCell - 1.0f;
+}
+
 std::optional<int> checkpointTouched(const PlayerState& state, const Map& map, const PlayerParams& params) noexcept {
     const auto checkpoints = map.checkpoints();
     for (std::size_t i = 0; i < checkpoints.size(); ++i) {

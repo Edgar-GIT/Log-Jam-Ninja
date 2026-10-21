@@ -98,6 +98,9 @@ void step(PlayerState& state, const Map& map, const PlayerInput& input, const Pl
 //true if the player fell below the bottom of the map
 [[nodiscard]] bool fellOutOfMap(const PlayerState& state, const Map& map) noexcept;
 
+//true if the player touches the right edge of the map: the end of the level, until maps have a finish point of their own
+[[nodiscard]] bool reachedGoal(const PlayerState& state, const Map& map, const PlayerParams& params) noexcept;
+
 //index (in map.checkpoints()) of the first checkpoint the player touches, if any
 //the touch area of a checkpoint is its cell and the two cells above it, so walking past it is enough
 [[nodiscard]] std::optional<int> checkpointTouched(const PlayerState& state, const Map& map,

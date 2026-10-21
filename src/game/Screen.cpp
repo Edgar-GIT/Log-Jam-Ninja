@@ -7,11 +7,14 @@
 
 namespace ljn {
 
-Screen::Screen(const char* title) {
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT);
+Screen::Screen(const char* title, bool fullscreen, bool vsync, bool integerScale)
+    : m_integerScale(integerScale), m_vsync(vsync) {
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(kWidth, kHeight, title);
     SetWindowMinSize(kWidth, kHeight);
-    SetTargetFPS(60);
+
+    //the frame rate is limited instead of using the vsync of the monitor, so it can be changed while playing
+    SetTargetFPS(vsync ? 60 : 0);
 
     //start as big as the monitor allows with a whole multiple of the picture (the reference is 1080p, so 2x)
     const int monitor = GetCurrentMonitor();
@@ -22,9 +25,17 @@ Screen::Screen(const char* title) {
     SetWindowPosition((GetMonitorWidth(monitor) - kWidth * multiple) / 2,
                       (GetMonitorHeight(monitor) - kHeight * multiple) / 2);
 
+    //the size of the window, to go back to it when the game leaves the fullscreen
+    m_windowedSize = {static_cast<float>(GetScreenWidth()), static_cast<float>(GetScreenHeight())};
+    m_windowedPosition = GetWindowPosition();
+
     //the picture: nearest filter keeps every pixel sharp when it is enlarged
     m_picture = LoadRenderTexture(kWidth, kHeight);
     SetTextureFilter(m_picture.texture, TEXTURE_FILTER_POINT);
+
+    if (fullscreen) {
+        setFullscreen(true);
+    }
 }
 
 Screen::~Screen() {
@@ -75,16 +86,31 @@ void Screen::present() {
     EndDrawing();
 }
 
-void Screen::toggleFullscreen() {
-    if (IsWindowFullscreen()) {
+void Screen::setFullscreen(bool on) {
+    if (on == IsWindowFullscreen()) {
+        return;
+    }
+
+    if (on) {
+        //remember the window, so it can be restored when the fullscreen ends
+        m_windowedSize = {static_cast<float>(GetScreenWidth()), static_cast<float>(GetScreenHeight())};
+        m_windowedPosition = GetWindowPosition();
         ToggleFullscreen();
         return;
     }
 
-    //fullscreen uses the size of the monitor
-    const int monitor = GetCurrentMonitor();
-    SetWindowSize(GetMonitorWidth(monitor), GetMonitorHeight(monitor));
     ToggleFullscreen();
+    SetWindowSize(static_cast<int>(m_windowedSize.x), static_cast<int>(m_windowedSize.y));
+    SetWindowPosition(static_cast<int>(m_windowedPosition.x), static_cast<int>(m_windowedPosition.y));
+}
+
+bool Screen::isFullscreen() const noexcept {
+    return IsWindowFullscreen();
+}
+
+void Screen::setVsync(bool on) {
+    m_vsync = on;
+    SetTargetFPS(on ? 60 : 0);
 }
 
 }  //namespace ljn

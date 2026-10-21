@@ -14,7 +14,8 @@ public:
     static constexpr int kWidth = 960;
     static constexpr int kHeight = 540;
 
-    explicit Screen(const char* title);
+    //opens the window with the video options of the settings
+    Screen(const char* title, bool fullscreen, bool vsync, bool integerScale);
     ~Screen();
 
     //there is only one window, so it cannot be copied
@@ -28,8 +29,17 @@ public:
     //puts the picture on the window, centered, with black bars where it does not fill
     void present();
 
-    //F11 style switches
-    void toggleFullscreen();
+    //fullscreen on or off (the windowed size is kept, so going back looks the same as before)
+    void setFullscreen(bool on);
+    [[nodiscard]] bool isFullscreen() const noexcept;
+
+    //raylib cannot change the vsync of a window that is already open, so this limits the frame rate instead
+    void setVsync(bool on);
+    [[nodiscard]] bool vsync() const noexcept { return m_vsync; }
+
+    //on: only whole multiples (2x, 3x), pixels stay perfect. off: any size that fits, pixels can be uneven
+    void setIntegerScale(bool on) noexcept { m_integerScale = on; }
+    [[nodiscard]] bool integerScale() const noexcept { return m_integerScale; }
     void toggleIntegerScale() noexcept { m_integerScale = !m_integerScale; }
 
     //how many times the picture is enlarged right now (can be fractional when integer scale is off)
@@ -44,8 +54,13 @@ public:
 private:
     RenderTexture2D m_picture{};
 
-    //on: only whole multiples (2x, 3x), pixels stay perfect. off: any size that fits, pixels can be uneven
+    //on: only whole multiples (2x, 3x), pixels stay perfect. off: any size that fits
     bool m_integerScale{true};
+    bool m_vsync{true};
+
+    //the size and the place of the window when it is not fullscreen
+    Vector2 m_windowedSize{0.0f, 0.0f};
+    Vector2 m_windowedPosition{0.0f, 0.0f};
 };
 
 }  //namespace ljn

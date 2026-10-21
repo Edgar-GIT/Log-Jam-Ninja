@@ -45,6 +45,9 @@ public:
     //how many times the picture is enlarged right now (can be fractional when integer scale is off)
     [[nodiscard]] float scale() const noexcept;
 
+    //TEMP
+    void savePicture(const char* path);
+
     //where the picture is on the window, in window pixels
     [[nodiscard]] Rectangle destination() const noexcept;
 

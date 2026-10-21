@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include "Assets.hpp"
+#include "ButtonMenuView.hpp"
 #include "Input.hpp"
 #include "LevelRenderer.hpp"
 #include "MenuView.hpp"
@@ -35,6 +36,7 @@ struct Level {
 
 //the ids of the items of the menus, so the code never uses a naked number
 enum MenuId : int {
+    //the order is the order of the buttons in the sheet (row 0 is Play, row 4 is Quit)
     kTitlePlay = 1,
     kTitleLevels,
     kTitleControls,
@@ -165,6 +167,9 @@ private:
 
     //the menus of the scenes
     Menu m_titleMenu;
+
+    //the title screen shows its menu with the button sheet (the placeholder menu in the view is the fallback)
+    ButtonMenuView m_titleButtons;
     Menu m_levelMenu;
     Menu m_settingsMenu;
     Menu m_controlsMenu;

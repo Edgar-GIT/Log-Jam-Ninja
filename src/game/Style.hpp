@@ -22,6 +22,10 @@ inline constexpr Color kAccent{120, 210, 255, 255};
 inline constexpr Color kGood{120, 220, 140, 255};
 inline constexpr Color kBad{255, 120, 120, 255};
 
+//the title of the game, and the shadow under it
+inline constexpr Color kGold{240, 196, 84, 255};
+inline constexpr Color kShadeStrong{10, 11, 16, 255};
+
 //the rectangle behind the item under the cursor
 inline constexpr Color kHighlight{255, 255, 255, 38};
 

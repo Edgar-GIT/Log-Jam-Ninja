@@ -40,6 +40,7 @@ public:
 
     //the mouse
     [[nodiscard]] bool mousePressed() const noexcept;
+    [[nodiscard]] bool mouseDown() const noexcept;
     [[nodiscard]] Vector2 mousePosition() const noexcept;
 
     //true if the mouse moved since the last frame

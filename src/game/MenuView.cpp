@@ -92,6 +92,30 @@ void MenuView::draw(const Menu& menu, const Rectangle& area) const {
     }
 }
 
+void MenuView::draw(const Menu& menu) const {
+    draw(menu, m_area);
+}
+
+MenuEvent MenuView::updateMouse(Menu& menu, Vector2 mouse, bool moved, bool pressed, const Rectangle& area) {
+    const int index = itemAt(menu, mouse, area);
+    if (index < 0) {
+        return {};
+    }
+
+    //the item under the mouse becomes the one under the cursor
+    if (moved) {
+        menu.hover(index);
+    }
+    if (pressed) {
+        return menu.click(index, sliderFraction(menu, index, mouse, area));
+    }
+    return {};
+}
+
+MenuEvent MenuView::updateMouse(Menu& menu, Vector2 mouse, bool moved, bool pressed) {
+    return updateMouse(menu, mouse, moved, pressed, m_area);
+}
+
 int MenuView::itemAt(const Menu& menu, Vector2 position, const Rectangle& area) const {
     for (std::size_t i = 0; i < menu.size(); ++i) {
         //the titles are not things to click

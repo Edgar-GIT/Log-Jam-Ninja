@@ -118,6 +118,10 @@ bool Input::mousePressed() const noexcept {
     return IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
 
+bool Input::mouseDown() const noexcept {
+    return IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+}
+
 Vector2 Input::mousePosition() const noexcept {
     return m_mouse;
 }

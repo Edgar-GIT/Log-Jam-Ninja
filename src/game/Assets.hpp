@@ -26,8 +26,15 @@ struct PlayerSprites {
     Sprite attack;
 };
 
+//menu images: the background of the title screen and the sheet with all the title buttons (5 rows, 4 columns)
+struct UiSprites {
+    Sprite menu_background;
+    Sprite menu_buttons;
+};
+
 struct Sprites {
     PlayerSprites player;
+    UiSprites ui;
 };
 
 struct Manifest {

@@ -13,20 +13,33 @@ namespace ljn {
 namespace {
 
 //where each menu is drawn
-constexpr Rectangle kTitleArea{300.0f, 190.0f, 360.0f, 230.0f};
 constexpr Rectangle kLevelArea{250.0f, 80.0f, 460.0f, 390.0f};
 constexpr Rectangle kSettingsArea{250.0f, 70.0f, 460.0f, 400.0f};
 constexpr Rectangle kControlsArea{210.0f, 60.0f, 540.0f, 420.0f};
 constexpr Rectangle kPauseArea{330.0f, 160.0f, 300.0f, 190.0f};
 constexpr Rectangle kCompleteArea{330.0f, 190.0f, 300.0f, 150.0f};
 
+//the middle of the picture, where the texts are centered
+constexpr float kMiddle = static_cast<float>(Screen::kWidth) * 0.5f;
+
+//draws a text in the middle of a x
+void drawTextCentered(const char* text, float centerX, float y, int size, Color color) {
+    const int width = MeasureText(text, size);
+    DrawText(text, static_cast<int>(std::lround(centerX - static_cast<float>(width) * 0.5f)),
+             static_cast<int>(std::lround(y)), size, color);
+}
+
 }  //anonymous namespace
 
 //the title screen: the way into the game
 void Game::handleTitleKeys() {
     const MenuEvent event = m_titleMenu.update(menuInput());
-    const MenuEvent mouse = updateMouse(m_titleMenu, kTitleArea);
-    const MenuEvent chosen = event.kind != EventKind::None ? event : mouse;
+
+    //the title uses the sprite buttons, the view turns the mouse into menu events
+    const Vector2 mouse = m_screen.toPicture(m_input.mousePosition());
+    const MenuEvent mouseEvent =
+        m_titleButtons.updateMouse(m_titleMenu, mouse, m_input.mousePressed(), m_input.mouseDown());
+    const MenuEvent chosen = event.kind != EventKind::None ? event : mouseEvent;
 
     //the title is the first screen, there is nowhere to go back to
     if (chosen.kind != EventKind::Activated) {
@@ -66,11 +79,29 @@ void Game::handleTitleKeys() {
 }
 
 void Game::drawTitle() {
-    DrawText("LOG JAM NINJA", 240, 70, style::kTitleSize, style::kText);
-    DrawText("a ninja made of logs", 340, 130, style::kItemSize, style::kTextDim);
-    m_menuView.draw(m_titleMenu, kTitleArea);
-    DrawText("arrows or W and S to move   enter to choose   escape to go back", 250, 500, style::kSmallSize,
-             style::kTextDim);
+    //the background already has the sign with the name of the game
+    const Sprite& background = m_assets.manifest().sprites.ui.menu_background;
+    if (!background.missing) {
+        const Rectangle source{0.0f, 0.0f, static_cast<float>(background.texture.width),
+                               static_cast<float>(background.texture.height)};
+        DrawTexturePro(background.texture, source,
+                       Rectangle{0.0f, 0.0f, static_cast<float>(Screen::kWidth), static_cast<float>(Screen::kHeight)},
+                       Vector2{0.0f, 0.0f}, 0.0f, WHITE);
+    } else {
+        //no image yet: the plain title
+        drawTextCentered("LOG JAM NINJA", kMiddle + 3.0f, 123.0f, 60, style::kShadeStrong);
+        drawTextCentered("LOG JAM NINJA", kMiddle, 120.0f, 60, style::kGold);
+        drawTextCentered("Arrows or WASD + Enter, or the mouse", kMiddle, static_cast<float>(Screen::kHeight) - 60.0f,
+                         style::kSmallSize, style::kTextDim);
+    }
+
+    m_titleButtons.draw(m_titleMenu, GetTime());
+
+    if (m_levels.empty()) {
+        //at the left, so it does not cover the buttons
+        DrawText("No levels found. Drop a map file (.json) on the window to play it.", 8, Screen::kHeight - 24,
+                 style::kSmallSize, style::kBad);
+    }
 }
 
 //the list of the levels, with the record of each one

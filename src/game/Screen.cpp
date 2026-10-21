@@ -76,12 +76,6 @@ Vector2 Screen::toPicture(Vector2 windowPosition) const noexcept {
     return {(windowPosition.x - area.x) / size, (windowPosition.y - area.y) / size};
 }
 
-void Screen::savePicture(const char* path) {
-    Image image = LoadImageFromTexture(m_picture.texture);
-    ExportImage(image, path);
-    UnloadImage(image);
-}
-
 void Screen::present() {
     BeginDrawing();
     ClearBackground(BLACK);

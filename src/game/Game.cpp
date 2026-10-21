@@ -136,18 +136,6 @@ void Game::draw() {
     }
 
     m_screen.endPicture();
-    static int frames = 0;
-    ++frames;
-    if (frames == 90) {
-        m_screen.savePicture("/tmp/opencode/title.png");
-    }
-    if (frames == 91) {
-        m_titleButtons.setScale(0.0f);
-    }
-    if (frames == 93) {
-        m_screen.savePicture("/tmp/opencode/title_nobtns.png");
-        m_quit = true;
-    }
     m_screen.present();
 }
 

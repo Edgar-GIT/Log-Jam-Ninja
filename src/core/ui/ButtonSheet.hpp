@@ -33,8 +33,8 @@ struct SheetLayout {
 
 //how long each frame stays on screen
 struct SheetAnimation {
-    double idleFrameSeconds{0.6};
-    double hoverFrameSeconds{0.2};
+    double idleFrameSeconds{1.2};
+    double hoverFrameSeconds{0.6};
 };
 
 enum class ButtonLook { Idle, Hover };

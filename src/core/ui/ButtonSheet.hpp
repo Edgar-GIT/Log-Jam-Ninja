@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <vector>
 
 namespace ljn {
 
@@ -61,34 +62,84 @@ enum class ButtonLook { Idle, Hover };
     return hover ? layout.idleFrames + frame : frame;
 }
 
-//buttons stacked in a column, all with the same height (pitch) and centered on one x
+//buttons in rows: the first row is at the top, each row can have more than one button side by side
 struct ButtonStack {
+    //the x of the middle of the column
     float centerX{480.0f};
+
+    //the y of the top of the first row
     float top{296.0f};
 
-    //the distance from the center of one button to the next
+    //the distance from the center of one row to the next
     float pitch{46.0f};
 
     //how wide the area that reacts to the mouse is
     float hitWidth{160.0f};
 
+    //the space between two buttons of the same row
+    float gap{20.0f};
+
+    //how many buttons each row has, from the top row to the bottom one
+    std::vector<int> rows{1};
+
+    //where a button is: the row, its place in that row and how many buttons that row has
+    struct Place {
+        int row{0};
+        int column{0};
+        int count{1};
+    };
+
+    //the row of a button, its place in the row and how many buttons the row has.
+    //the last row of the layout takes what is left, and a button that does not fit goes on a row of its own
+    [[nodiscard]] Place placeOf(std::size_t index, std::size_t count) const noexcept {
+        int used = 0;
+        for (int row = 0; row < static_cast<int>(rows.size()); ++row) {
+            const int want = std::max(1, rows[static_cast<std::size_t>(row)]);
+            const int take = std::min(want, static_cast<int>(count) - used);
+            if (take <= 0) {
+                break;
+            }
+            if (index < static_cast<std::size_t>(used + take)) {
+                return {row, static_cast<int>(index) - used, take};
+            }
+            used += take;
+        }
+        const int extra = static_cast<int>(index) - used;
+        return {static_cast<int>(rows.size()) + extra, 0, 1};
+    }
+
     //the area of the button at this position in the list, areas touch each other, so there are no gaps
-    [[nodiscard]] constexpr PixelRect slot(std::size_t index) const noexcept {
-        return {centerX - hitWidth * 0.5f, top + pitch * static_cast<float>(index), hitWidth, pitch};
+    [[nodiscard]] PixelRect slot(std::size_t index, std::size_t count) const noexcept {
+        const Place place = placeOf(index, count);
+        return {centerXOf(index, count) - hitWidth * 0.5f, top + pitch * static_cast<float>(place.row), hitWidth,
+                pitch};
     }
 
     //the center of the button, where its picture is centered
-    [[nodiscard]] constexpr float centerY(std::size_t index) const noexcept {
-        return top + pitch * (static_cast<float>(index) + 0.5f);
+    [[nodiscard]] float centerY(std::size_t index, std::size_t count) const noexcept {
+        const Place place = placeOf(index, count);
+        return top + pitch * (static_cast<float>(place.row) + 0.5f);
+    }
+
+    //the x of the center of the button: the row is centered on centerX
+    [[nodiscard]] float centerXOf(std::size_t index, std::size_t count) const noexcept {
+        const Place place = placeOf(index, count);
+        const float step = hitWidth + gap;
+        const float offset = static_cast<float>(place.column) - static_cast<float>(place.count - 1) * 0.5f;
+        return centerX + offset * step;
     }
 
     //the position in the list of the button under a point, -1 if there is none
-    [[nodiscard]] constexpr int indexAt(float px, float py, std::size_t count) const noexcept {
-        if (pitch <= 0.0f || py < top || px < centerX - hitWidth * 0.5f || px >= centerX + hitWidth * 0.5f) {
+    [[nodiscard]] int indexAt(float px, float py, std::size_t count) const noexcept {
+        if (pitch <= 0.0f) {
             return -1;
         }
-        const auto index = static_cast<std::size_t>((py - top) / pitch);
-        return index < count ? static_cast<int>(index) : -1;
+        for (std::size_t index = 0; index < count; ++index) {
+            if (slot(index, count).contains(px, py)) {
+                return static_cast<int>(index);
+            }
+        }
+        return -1;
     }
 };
 

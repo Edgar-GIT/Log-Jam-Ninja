@@ -178,14 +178,15 @@ void Game::buildTitleMenu() {
     m_titleMenu.add(Menu::button(kTitleSettings, "Settings"));
     m_titleMenu.add(Menu::button(kTitleQuit, "Quit"));
 
-    //the title buttons: five in a column in the clearing, below the sign of the background (tune these numbers by eye)
-    m_titleButtons = ButtonMenuView{ButtonStack{.centerX = 480.0f, .top = 125.0f, .pitch = 84.0f, .hitWidth = 190.0f},
+    //the title buttons: one under the sign and two by two below it, so the column uses more width than height
+    m_titleButtons = ButtonMenuView{ButtonStack{.centerX = 480.0f, .top = 277.0f, .pitch = 84.0f, .hitWidth = 175.0f,
+                                               .gap = 24.0f, .rows = {1, 2, 2}},
                                     {{kTitlePlay, 0},
                                      {kTitleLevels, 1},
                                      {kTitleControls, 2},
                                      {kTitleSettings, 3},
                                      {kTitleQuit, 4}},
-                                    Rectangle{385.0f, 130.0f, 190.0f, 400.0f}};
+                                    Rectangle{385.0f, 280.0f, 190.0f, 250.0f}};
     m_titleButtons.setSheet(&m_assets.manifest().sprites.ui.menu_buttons);
 
     //the sheet is big (1672x941), the buttons are drawn at a bit more than half of their size

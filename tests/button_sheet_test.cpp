@@ -57,10 +57,10 @@ static void testFrameColumn() {
 static void testStack() {
     const ButtonStack stack{.centerX = 480.0f, .top = 300.0f, .pitch = 48.0f, .hitWidth = 170.0f};
 
-    const PixelRect second = stack.slot(1);
+    const PixelRect second = stack.slot(1, 5);
     CHECK(second.x == 395.0f && second.y == 348.0f && second.width == 170.0f && second.height == 48.0f);
-    CHECK(stack.centerY(0) == 324.0f);
-    CHECK(stack.centerY(1) == 372.0f);
+    CHECK(stack.centerY(0, 5) == 324.0f);
+    CHECK(stack.centerY(1, 5) == 372.0f);
 
     CHECK(stack.indexAt(480.0f, 300.0f, 5) == 0);
     CHECK(stack.indexAt(480.0f, 347.9f, 5) == 0);
@@ -77,9 +77,55 @@ static void testStack() {
     CHECK(stack.indexAt(480.0f, 400.0f, 2) == -1);
 }
 
+//the rows can have more than one button side by side: the first row one, the others two
+static void testRows() {
+    const ButtonStack stack{.centerX = 480.0f, .top = 277.0f, .pitch = 84.0f, .hitWidth = 175.0f, .gap = 24.0f,
+                            .rows = {1, 2, 2}};
+
+    //the first row has one button, in the middle
+    CHECK(stack.placeOf(0, 5).row == 0);
+    CHECK(stack.placeOf(0, 5).column == 0);
+    CHECK(stack.placeOf(0, 5).count == 1);
+    CHECK(stack.centerXOf(0, 5) == 480.0f);
+    CHECK(stack.centerY(0, 5) == 319.0f);
+
+    //the second row has two, one on each side
+    CHECK(stack.placeOf(1, 5).row == 1);
+    CHECK(stack.placeOf(1, 5).column == 0);
+    CHECK(stack.placeOf(2, 5).column == 1);
+    CHECK(stack.placeOf(1, 5).count == 2);
+    CHECK(stack.centerXOf(1, 5) == 380.5f);
+    CHECK(stack.centerXOf(2, 5) == 579.5f);
+    CHECK(stack.centerY(1, 5) == 403.0f);
+    CHECK(stack.centerY(2, 5) == 403.0f);
+
+    //the third row is like the second
+    CHECK(stack.placeOf(3, 5).row == 2);
+    CHECK(stack.placeOf(4, 5).row == 2);
+    CHECK(stack.centerY(3, 5) == 487.0f);
+    CHECK(stack.centerY(4, 5) == 487.0f);
+
+    //the mouse finds the button of its own row
+    CHECK(stack.indexAt(380.5f, 403.0f, 5) == 1);
+    CHECK(stack.indexAt(579.5f, 403.0f, 5) == 2);
+    CHECK(stack.indexAt(480.0f, 319.0f, 5) == 0);
+    CHECK(stack.indexAt(480.0f, 487.0f, 5) == -1);  //between the two of the last row
+    CHECK(stack.indexAt(280.0f, 403.0f, 5) == -1);  //left of the row
+    CHECK(stack.indexAt(680.0f, 403.0f, 5) == -1);  //right of the row
+
+    //the areas of the two buttons of a row do not touch each other
+    CHECK(stack.slot(1, 5).x + stack.slot(1, 5).width < stack.slot(2, 5).x);
+
+    //with one button less the last row has only one
+    CHECK(stack.placeOf(3, 4).row == 2);
+    CHECK(stack.placeOf(3, 4).count == 1);
+    CHECK(stack.centerXOf(3, 4) == 480.0f);
+}
+
 int main() {
     testFrameSource();
     testFrameColumn();
     testStack();
+    testRows();
     std::println("all button sheet tests passed");
 }

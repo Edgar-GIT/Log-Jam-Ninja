@@ -96,9 +96,9 @@ void ButtonMenuView::drawButton(const Menu& menu, int index, double seconds) con
     const float width = cell.width * m_scale;
     const float height = cell.height * m_scale;
     const Rectangle source{cell.x, cell.y, cell.width, cell.height};
-    const Rectangle destination{std::floor(m_stack.centerX - width * 0.5f),
-                                std::floor(m_stack.centerY(static_cast<std::size_t>(index)) - height * 0.5f), width,
-                                height};
+    const Rectangle destination{std::floor(m_stack.centerXOf(static_cast<std::size_t>(index), menu.size()) - width * 0.5f),
+                                std::floor(m_stack.centerY(static_cast<std::size_t>(index), menu.size()) - height * 0.5f),
+                                width, height};
     DrawTexturePro(texture, source, destination, Vector2{0.0f, 0.0f}, 0.0f, item.enabled ? WHITE : kDisabledTint);
 }
 

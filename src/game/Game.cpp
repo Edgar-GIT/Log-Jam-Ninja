@@ -75,6 +75,7 @@ void Game::run() {
         }
         draw();
     }
+    TraceLog(LOG_INFO, "TEMP GAME END: quit=%d close=%d", (int)m_quit, (int)WindowShouldClose());
 }
 
 void Game::readInput() {
@@ -308,8 +309,12 @@ void Game::loadUserFiles() {
 
 void Game::saveSettings() {
     //the free function of the core, not this one
+    TraceLog(LOG_INFO, "TEMP saveSettings: %s", m_settingsFile.string().c_str());
     if (const auto saved = ljn::saveSettings(m_settingsFile, m_settings); !saved) {
         setStatus(std::format("Could not save the settings: {}", saved.error()), true);
+        TraceLog(LOG_WARNING, "TEMP saveSettings failed: %s", saved.error().c_str());
+    } else {
+        TraceLog(LOG_INFO, "TEMP saveSettings ok");
     }
 }
 

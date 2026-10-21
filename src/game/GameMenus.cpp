@@ -27,6 +27,7 @@ void Game::handleTitleKeys() {
     const MenuEvent event = m_titleMenu.update(menuInput());
     const MenuEvent mouse = updateMouse(m_titleMenu, kTitleArea);
     const MenuEvent chosen = event.kind != EventKind::None ? event : mouse;
+    TraceLog(LOG_INFO, "TEMP title event kind=%d id=%d", (int)chosen.kind, chosen.id);
 
     //the title is the first screen, there is nowhere to go back to
     if (chosen.kind != EventKind::Activated) {
@@ -106,6 +107,7 @@ void Game::handleSettingsKeys() {
     const MenuEvent event = m_settingsMenu.update(menuInput());
     const MenuEvent mouse = updateMouse(m_settingsMenu, kSettingsArea);
     const MenuEvent chosen = event.kind != EventKind::None ? event : mouse;
+    TraceLog(LOG_INFO, "TEMP settings event kind=%d id=%d", (int)chosen.kind, chosen.id);
 
     if (chosen.kind == EventKind::Back || (chosen.kind == EventKind::Activated && chosen.id == kSettingsBack)) {
         saveSettings();

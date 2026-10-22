@@ -1,5 +1,5 @@
 // ButtonMenuView.hpp - shows a Menu as sprite buttons from a sprite sheet (the title screen), and turns the mouse into menu events.
-// the sheet has one row for each button and the columns are the frames: idle, idle, hover, hover (see ui/ButtonSheet.hpp).
+// the sheet has one row for each button and the columns are the frames: one idle and one hover (see ui/ButtonSheet.hpp).
 // if the sheet image does not exist yet, the plain placeholder menu is shown instead, so the game always works.
 
 #pragma once

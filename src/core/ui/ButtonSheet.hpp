@@ -24,10 +24,11 @@ struct PixelRect {
 
 //how the sheet is built: one row for each button, and the columns are the frames
 //the idle frames come first, then the hover frames (the look when the mouse or the cursor is on the button)
+//the sheet of the game has one frame of each, so a button only changes when the cursor is on it
 struct SheetLayout {
     int rows{5};
-    int idleFrames{2};
-    int hoverFrames{2};
+    int idleFrames{1};
+    int hoverFrames{1};
 
     [[nodiscard]] constexpr int columns() const noexcept { return idleFrames + hoverFrames; }
 };

@@ -9,35 +9,47 @@ using namespace ljn;
 //the cells of the sheet are cut in equal parts, row by row and column by column
 static void testFrameSource() {
     const SheetLayout layout;
-    CHECK(layout.columns() == 4);
+    CHECK(layout.columns() == 2);
 
-    //a 640x360 sheet: 4 columns of 160 and 5 rows of 72
-    const PixelRect first = frameSource(640, 360, layout, 0, 0);
-    CHECK(first.x == 0.0f && first.y == 0.0f && first.width == 160.0f && first.height == 72.0f);
+    //a 836x360 sheet: 2 columns of 418 and 5 rows of 72
+    const PixelRect first = frameSource(836, 360, layout, 0, 0);
+    CHECK(first.x == 0.0f && first.y == 0.0f && first.width == 418.0f && first.height == 72.0f);
 
-    //row 2 (the third button), column 3 (the second hover frame)
-    const PixelRect cell = frameSource(640, 360, layout, 2, 3);
-    CHECK(cell.x == 480.0f && cell.y == 144.0f && cell.width == 160.0f && cell.height == 72.0f);
+    //row 2 (the third button), the hover frame
+    const PixelRect cell = frameSource(836, 360, layout, 2, 1);
+    CHECK(cell.x == 418.0f && cell.y == 144.0f && cell.width == 418.0f && cell.height == 72.0f);
 
-    //a size that does not divide evenly: the leftover pixels are ignored (1672 / 4 = 418, 941 / 5 = 188)
-    const PixelRect odd = frameSource(1672, 941, layout, 4, 3);
+    //a size that does not divide evenly: the leftover pixels are ignored (836 / 2 = 418, 941 / 5 = 188)
+    const PixelRect odd = frameSource(836, 941, layout, 4, 1);
     CHECK(odd.width == 418.0f && odd.height == 188.0f);
-    CHECK(odd.x + odd.width <= 1672.0f && odd.y + odd.height <= 941.0f);
+    CHECK(odd.x + odd.width <= 836.0f && odd.y + odd.height <= 941.0f);
+
+    //a sheet with more frames has more columns
+    const SheetLayout many{.rows = 5, .idleFrames = 2, .hoverFrames = 2};
+    const PixelRect wide = frameSource(1672, 941, many, 4, 3);
+    CHECK(wide.x == 1254.0f && wide.width == 418.0f && wide.height == 188.0f);
 }
 
-//idle frames are columns 0 and 1, hover frames are columns 2 and 3, and they repeat
+//with one frame of each look the button only changes when the cursor is on it
 static void testFrameColumn() {
     const SheetLayout layout;
     const SheetAnimation animation{.idleFrameSeconds = 0.5, .hoverFrameSeconds = 0.25};
 
-    CHECK(frameColumn(layout, animation, ButtonLook::Idle, 0.0) == 0);
-    CHECK(frameColumn(layout, animation, ButtonLook::Idle, 0.49) == 0);
-    CHECK(frameColumn(layout, animation, ButtonLook::Idle, 0.5) == 1);
-    CHECK(frameColumn(layout, animation, ButtonLook::Idle, 1.0) == 0);
+    for (const double t : {0.0, 0.49, 0.5, 1.0, 12345.6}) {
+        CHECK(frameColumn(layout, animation, ButtonLook::Idle, t) == 0);
+        CHECK(frameColumn(layout, animation, ButtonLook::Hover, t) == 1);
+    }
 
-    CHECK(frameColumn(layout, animation, ButtonLook::Hover, 0.0) == 2);
-    CHECK(frameColumn(layout, animation, ButtonLook::Hover, 0.25) == 3);
-    CHECK(frameColumn(layout, animation, ButtonLook::Hover, 0.5) == 2);
+    //a sheet with more frames still repeats them
+    const SheetLayout many{.rows = 5, .idleFrames = 2, .hoverFrames = 2};
+    CHECK(frameColumn(many, animation, ButtonLook::Idle, 0.0) == 0);
+    CHECK(frameColumn(many, animation, ButtonLook::Idle, 0.49) == 0);
+    CHECK(frameColumn(many, animation, ButtonLook::Idle, 0.5) == 1);
+    CHECK(frameColumn(many, animation, ButtonLook::Idle, 1.0) == 0);
+
+    CHECK(frameColumn(many, animation, ButtonLook::Hover, 0.0) == 2);
+    CHECK(frameColumn(many, animation, ButtonLook::Hover, 0.25) == 3);
+    CHECK(frameColumn(many, animation, ButtonLook::Hover, 0.5) == 2);
 
     //a sheet with one idle frame and three hover frames
     const SheetLayout other{.rows = 5, .idleFrames = 1, .hoverFrames = 3};

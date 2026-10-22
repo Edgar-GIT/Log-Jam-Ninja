@@ -130,6 +130,30 @@ struct ButtonStack {
         return centerX + offset * step;
     }
 
+    //the first index of a row and how many buttons it has (no buttons past the last row)
+    struct RowInfo {
+        int first{0};
+        int count{0};
+    };
+
+    [[nodiscard]] RowInfo rowInfo(int row, std::size_t count) const noexcept {
+        int first = 0;
+        for (int r = 0; r <= row; ++r) {
+            //a row past the layout has one button, like the extra rows of placeOf
+            const int want = r < static_cast<int>(rows.size()) ? std::max(1, rows[static_cast<std::size_t>(r)]) : 1;
+            const int left = static_cast<int>(count) - first;
+            if (left <= 0) {
+                return {0, 0};
+            }
+            const int take = std::min(want, left);
+            if (r == row) {
+                return {first, take};
+            }
+            first += take;
+        }
+        return {0, 0};
+    }
+
     //the position in the list of the button under a point, -1 if there is none
     [[nodiscard]] int indexAt(float px, float py, std::size_t count) const noexcept {
         if (pitch <= 0.0f) {
@@ -143,5 +167,38 @@ struct ButtonStack {
         return -1;
     }
 };
+
+//the way the arrow keys move between the buttons
+enum class Direction { Up, Down, Left, Right };
+
+//the button next to this one in a direction, -1 if there is none.
+//left and right walk along the row; up and down go to the row above or below keeping the column,
+//and take the last button of that row when it is shorter
+[[nodiscard]] inline int neighbour(const ButtonStack& stack, std::size_t index, std::size_t count,
+                                   Direction direction) noexcept {
+    if (index >= count) {
+        return -1;
+    }
+    const ButtonStack::Place place = stack.placeOf(index, count);
+    switch (direction) {
+        case Direction::Left:
+            return place.column > 0 ? static_cast<int>(index) - 1 : -1;
+        case Direction::Right:
+            return place.column + 1 < place.count ? static_cast<int>(index) + 1 : -1;
+        case Direction::Up:
+        case Direction::Down: {
+            const int row = place.row + (direction == Direction::Down ? 1 : -1);
+            if (row < 0) {
+                return -1;
+            }
+            const ButtonStack::RowInfo info = stack.rowInfo(row, count);
+            if (info.count <= 0) {
+                return -1;
+            }
+            return info.first + std::min(place.column, info.count - 1);
+        }
+    }
+    return -1;
+}
 
 }  //namespace ljn

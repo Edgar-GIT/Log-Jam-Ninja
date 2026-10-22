@@ -65,6 +65,49 @@ static void testFrameColumn() {
     }
 }
 
+//the arrows follow where the buttons are: down from the first goes to the left of the row below
+static void testNeighbour() {
+    const ButtonStack stack{.centerX = 480.0f, .top = 277.0f, .pitch = 84.0f, .hitWidth = 175.0f, .gap = 24.0f,
+                            .rows = {1, 2, 2}};
+
+    //0 = play, 1 = levels, 2 = controls, 3 = settings, 4 = quit
+    CHECK(neighbour(stack, 0, 5, Direction::Down) == 1);
+    CHECK(neighbour(stack, 0, 5, Direction::Up) == -1);
+    CHECK(neighbour(stack, 0, 5, Direction::Left) == -1);
+    CHECK(neighbour(stack, 0, 5, Direction::Right) == -1);
+
+    //the second row: up goes back to play, left and right change side, down goes to the row below
+    CHECK(neighbour(stack, 1, 5, Direction::Up) == 0);
+    CHECK(neighbour(stack, 1, 5, Direction::Right) == 2);
+    CHECK(neighbour(stack, 1, 5, Direction::Left) == -1);
+    CHECK(neighbour(stack, 1, 5, Direction::Down) == 3);
+
+    CHECK(neighbour(stack, 2, 5, Direction::Up) == 0);
+    CHECK(neighbour(stack, 2, 5, Direction::Left) == 1);
+    CHECK(neighbour(stack, 2, 5, Direction::Right) == -1);
+    CHECK(neighbour(stack, 2, 5, Direction::Down) == 4);
+
+    //the last row
+    CHECK(neighbour(stack, 3, 5, Direction::Down) == -1);
+    CHECK(neighbour(stack, 3, 5, Direction::Up) == 1);
+    CHECK(neighbour(stack, 4, 5, Direction::Up) == 2);
+    CHECK(neighbour(stack, 4, 5, Direction::Down) == -1);
+
+    //on the way down a shorter row takes the place of its last button
+    CHECK(neighbour(stack, 2, 4, Direction::Down) == 3);
+    CHECK(neighbour(stack, 1, 4, Direction::Down) == 3);
+
+    //a plain column moves up and down and nowhere else
+    const ButtonStack column;
+    CHECK(neighbour(column, 1, 5, Direction::Up) == 0);
+    CHECK(neighbour(column, 1, 5, Direction::Down) == 2);
+    CHECK(neighbour(column, 1, 5, Direction::Left) == -1);
+    CHECK(neighbour(column, 1, 5, Direction::Right) == -1);
+
+    //out of the list
+    CHECK(neighbour(column, 5, 5, Direction::Up) == -1);
+    CHECK(neighbour(column, 0, 0, Direction::Down) == -1);
+}
 //the areas of the buttons touch each other and the mouse finds the right one
 static void testStack() {
     const ButtonStack stack{.centerX = 480.0f, .top = 300.0f, .pitch = 48.0f, .hitWidth = 170.0f};
@@ -139,5 +182,6 @@ int main() {
     testFrameColumn();
     testStack();
     testRows();
+    testNeighbour();
     std::println("all button sheet tests passed");
 }

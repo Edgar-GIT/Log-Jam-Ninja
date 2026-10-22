@@ -2,7 +2,9 @@
 
 #include "ButtonMenuView.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <cstddef>
 
 namespace ljn {
 namespace {
@@ -61,6 +63,41 @@ MenuEvent ButtonMenuView::updateMouse(Menu& menu, Vector2 mouse, bool pressed, [
     }
     m_lastCursor = menu.cursor();
     return event;
+}
+
+MenuEvent ButtonMenuView::updateKeys(Menu& menu, const MenuInput& input) {
+    //without the sheet the plain menu is a column, the list order is the screen order
+    if (usesFallback()) {
+        return menu.update(input);
+    }
+
+    //the arrows are used here, the menu only sees confirm and back
+    MenuInput keys = input;
+    keys.up = false;
+    keys.down = false;
+    keys.left = false;
+    keys.right = false;
+
+    const auto move = [this, &menu](Direction direction) {
+        const int next = neighbour(m_stack, static_cast<std::size_t>(std::max(0, menu.cursor())), menu.size(),
+                                   direction);
+        if (next >= 0) {
+            menu.setCursor(next);
+        }
+    };
+    if (input.up) {
+        move(Direction::Up);
+    }
+    if (input.down) {
+        move(Direction::Down);
+    }
+    if (input.left) {
+        move(Direction::Left);
+    }
+    if (input.right) {
+        move(Direction::Right);
+    }
+    return menu.update(keys);
 }
 
 void ButtonMenuView::draw(const Menu& menu, double seconds) const {

@@ -37,6 +37,10 @@ public:
     //the mouse in picture pixels: moving over a button selects it, a click uses it
     MenuEvent updateMouse(Menu& menu, Vector2 mouse, bool pressed, bool down);
 
+    //the keys: the arrows move by where the buttons are on the screen (the sheet is not a plain column),
+    //confirm and back are passed to the menu
+    MenuEvent updateKeys(Menu& menu, const MenuInput& input);
+
     //seconds is any clock that keeps running (the animation frames come from it)
     void draw(const Menu& menu, double seconds) const;
 

@@ -33,7 +33,8 @@ void drawTextCentered(const char* text, float centerX, float y, int size, Color 
 
 //the title screen: the way into the game
 void Game::handleTitleKeys() {
-    const MenuEvent event = m_titleMenu.update(menuInput());
+    //the title buttons are laid out 1+2+2, so the arrows follow the screen and not the order of the list
+    const MenuEvent event = m_titleButtons.updateKeys(m_titleMenu, menuInput());
 
     //the title uses the sprite buttons, the view turns the mouse into menu events
     const Vector2 mouse = m_screen.toPicture(m_input.mousePosition());

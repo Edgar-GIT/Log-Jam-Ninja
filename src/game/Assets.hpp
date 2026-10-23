@@ -56,6 +56,9 @@ public:
     [[nodiscard]] const std::filesystem::path& root() const noexcept { return m_root; }
     [[nodiscard]] const Manifest& manifest() const noexcept { return m_manifest; }
 
+    //the font of the menus (fonts/main_font_or_titles.ttf), the default font if it is missing
+    [[nodiscard]] const Font& menuFont() const noexcept { return m_menuFont; }
+
     //paths (relative to the root) of the images that were not found
     [[nodiscard]] const std::vector<std::string>& missing() const noexcept { return m_missing; }
 
@@ -66,6 +69,9 @@ private:
 
     //shared by every missing sprite
     Texture2D m_placeholder{};
+
+    //the font of the menus, loaded at a big size so it can be drawn smaller with a smooth edge
+    Font m_menuFont{};
 };
 
 }  //namespace ljn

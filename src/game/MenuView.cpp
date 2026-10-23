@@ -17,10 +17,29 @@ constexpr int kTextSize = style::kItemSize;
 //the width of the bar of a slider
 constexpr float kSliderWidth = 150.0f;
 
+//the space between two letters of the menu font
+constexpr float kFontSpacing = 1.0f;
+
+//the width of a text, with the menu font when there is one
+float textWidth(const Font* font, const std::string& text, int size) {
+    if (font != nullptr) {
+        return MeasureTextEx(*font, text.c_str(), static_cast<float>(size), kFontSpacing).x;
+    }
+    return static_cast<float>(MeasureText(text.c_str(), size));
+}
+
+//a text at x, y, with the menu font when there is one
+void drawText(const Font* font, const std::string& text, float x, float y, int size, Color color) {
+    if (font != nullptr) {
+        DrawTextEx(*font, text.c_str(), Vector2{x, y}, static_cast<float>(size), kFontSpacing, color);
+        return;
+    }
+    DrawText(text.c_str(), static_cast<int>(std::lround(x)), static_cast<int>(std::lround(y)), size, color);
+}
+
 //draws a text with its right side at rightX
-void drawRight(const std::string& text, float rightX, int y, int size, Color color) {
-    DrawText(text.c_str(), static_cast<int>(std::round(rightX - static_cast<float>(MeasureText(text.c_str(), size)))), y, size,
-             color);
+void drawRight(const Font* font, const std::string& text, float rightX, float y, int size, Color color) {
+    drawText(font, text, rightX - textWidth(font, text, size), y, size, color);
 }
 
 }  //anonymous namespace
@@ -36,6 +55,14 @@ Rectangle MenuView::sliderRect(const Rectangle& row) noexcept {
 }
 
 void MenuView::draw(const Menu& menu, const Rectangle& area) const {
+    draw(menu, area, nullptr);
+}
+
+void MenuView::draw(const Menu& menu, const Rectangle& area, const Font& font) const {
+    draw(menu, area, &font);
+}
+
+void MenuView::draw(const Menu& menu, const Rectangle& area, const Font* font) const {
     for (std::size_t i = 0; i < menu.size(); ++i) {
         const MenuItem& item = menu.items()[i];
         const Rectangle row = rowRect(menu, static_cast<int>(i), area);
@@ -47,25 +74,25 @@ void MenuView::draw(const Menu& menu, const Rectangle& area) const {
 
         //the items that cannot be used are dim
         const Color color = !item.enabled ? style::kTextDim : (selected ? style::kAccent : style::kText);
-        const int textY = static_cast<int>(std::round(row.y + (row.height - kTextSize) * 0.5f));
+        const float textY = std::round(row.y + (row.height - kTextSize) * 0.5f);
         const float rightX = row.x + row.width - 12.0f;
 
         if (item.kind == ItemKind::Label) {
-            DrawText(item.label.c_str(), static_cast<int>(row.x), textY, kTextSize, style::kTextDim);
+            drawText(font, item.label, row.x, textY, kTextSize, style::kTextDim);
             continue;
         }
 
-        DrawText(item.label.c_str(), static_cast<int>(row.x) + 10, textY, kTextSize, color);
+        drawText(font, item.label, row.x + 10.0f, textY, kTextSize, color);
 
         switch (item.kind) {
             case ItemKind::Toggle: {
-                drawRight(item.value != 0 ? "On" : "Off", rightX, textY, kTextSize, color);
+                drawRight(font, item.value != 0 ? "On" : "Off", rightX, textY, kTextSize, color);
                 break;
             }
             case ItemKind::Slider: {
                 //the number on the left of the bar
                 const Rectangle bar = sliderRect(row);
-                drawRight(std::to_string(item.value), bar.x - 10.0f, textY, kTextSize, color);
+                drawRight(font, std::to_string(item.value), bar.x - 10.0f, textY, kTextSize, color);
 
                 //the bar: the empty part and the part that is filled
                 DrawRectangleRec(bar, style::kPanelLine);
@@ -79,11 +106,11 @@ void MenuView::draw(const Menu& menu, const Rectangle& area) const {
                     item.value >= 0 && static_cast<std::size_t>(item.value) < item.choices.size()
                         ? item.choices[static_cast<std::size_t>(item.value)]
                         : std::string{};
-                drawRight(text, rightX, textY, kTextSize, color);
+                drawRight(font, text, rightX, textY, kTextSize, color);
                 break;
             }
             case ItemKind::Button: {
-                drawRight(item.detail, rightX, textY, kTextSize, style::kTextDim);
+                drawRight(font, item.detail, rightX, textY, kTextSize, style::kTextDim);
                 break;
             }
             case ItemKind::Label:

@@ -12,6 +12,12 @@ namespace {
 //size of the square that stands in for a missing image
 constexpr int kPlaceholderSize = 64;
 
+//the font is loaded big and drawn smaller, so the letters keep a smooth edge at any size
+constexpr int kFontSize = 48;
+
+//the font of the menus
+constexpr const char* kFontPath = "fonts/main_font_or_titles.ttf";
+
 //a magenta and black checkerboard: impossible to miss on screen
 Texture2D makePlaceholder() {
     const Image image = GenImageChecked(kPlaceholderSize, kPlaceholderSize, 8, 8, MAGENTA, BLACK);
@@ -42,6 +48,15 @@ Assets::Assets(std::filesystem::path root) : m_root(std::move(root)), m_placehol
         m_missing.push_back(relative);
         TraceLog(LOG_WARNING, "ASSETS: %s not found, using the placeholder", relative.c_str());
     });
+
+    //the menu font, the default font of raylib if the file is missing
+    if (const auto full = safeJoin(m_root, kFontPath)) {
+        m_menuFont = LoadFontEx(full->string().c_str(), kFontSize, nullptr, 0);
+    }
+    if (m_menuFont.texture.id == 0) {
+        m_menuFont = GetFontDefault();
+        TraceLog(LOG_WARNING, "ASSETS: %s not found, using the default font", kFontPath);
+    }
 }
 
 Assets::~Assets() {
@@ -52,6 +67,11 @@ Assets::~Assets() {
         }
     });
     UnloadTexture(m_placeholder);
+
+    //the default font belongs to raylib, only a loaded one is unlocked here
+    if (m_menuFont.texture.id != 0 && m_menuFont.texture.id != GetFontDefault().texture.id) {
+        UnloadFont(m_menuFont);
+    }
 }
 
 }  //namespace ljn

@@ -18,6 +18,9 @@ public:
     //draws the menu inside the area, one row for each item
     void draw(const Menu& menu, const Rectangle& area) const;
 
+    //the same, with a font of its own instead of the font of raylib
+    void draw(const Menu& menu, const Rectangle& area, const Font& font) const;
+
     //draws the menu inside the area of this view
     void draw(const Menu& menu) const;
 
@@ -34,6 +37,9 @@ public:
     [[nodiscard]] MenuEvent updateMouse(Menu& menu, Vector2 mouse, bool moved, bool pressed);
 
 private:
+    //draws the menu with a font, null for the font of raylib
+    void draw(const Menu& menu, const Rectangle& area, const Font* font) const;
+
     //the row of an item
     [[nodiscard]] static Rectangle rowRect(const Menu& menu, int index, const Rectangle& area) noexcept;
 

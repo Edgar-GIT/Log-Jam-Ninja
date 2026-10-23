@@ -176,8 +176,11 @@ void Game::handleSettingsKeys() {
 void Game::drawSettings() {
     //the art has a clearing in the middle, where the menu goes
     drawBackground(m_assets.manifest().sprites.ui.settings_background);
-    DrawText("SETTINGS", 410, 24, style::kHeadingSize, style::kText);
-    m_menuView.draw(m_settingsMenu, kSettingsArea);
+
+    //the settings screen uses the font of the game, the rest of the menus still use the font of raylib
+    const Font& font = m_assets.menuFont();
+    DrawTextEx(font, "SETTINGS", Vector2{410.0f, 24.0f}, static_cast<float>(style::kHeadingSize), 1.0f, style::kText);
+    m_menuView.draw(m_settingsMenu, kSettingsArea, font);
 }
 
 //the keys of the player, which can be changed

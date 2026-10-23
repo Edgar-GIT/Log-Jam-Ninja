@@ -29,6 +29,18 @@ void drawTextCentered(const char* text, float centerX, float y, int size, Color 
              static_cast<int>(std::lround(y)), size, color);
 }
 
+//an image stretched over the whole picture, the menus draw it under their items
+void drawBackground(const Sprite& background) {
+    if (background.missing) {
+        return;
+    }
+    const Rectangle source{0.0f, 0.0f, static_cast<float>(background.texture.width),
+                           static_cast<float>(background.texture.height)};
+    DrawTexturePro(background.texture, source,
+                   Rectangle{0.0f, 0.0f, static_cast<float>(Screen::kWidth), static_cast<float>(Screen::kHeight)},
+                   Vector2{0.0f, 0.0f}, 0.0f, WHITE);
+}
+
 }  //anonymous namespace
 
 //the title screen: the way into the game
@@ -82,13 +94,8 @@ void Game::handleTitleKeys() {
 void Game::drawTitle() {
     //the background already has the sign with the name of the game
     const Sprite& background = m_assets.manifest().sprites.ui.menu_background;
-    if (!background.missing) {
-        const Rectangle source{0.0f, 0.0f, static_cast<float>(background.texture.width),
-                               static_cast<float>(background.texture.height)};
-        DrawTexturePro(background.texture, source,
-                       Rectangle{0.0f, 0.0f, static_cast<float>(Screen::kWidth), static_cast<float>(Screen::kHeight)},
-                       Vector2{0.0f, 0.0f}, 0.0f, WHITE);
-    } else {
+    drawBackground(background);
+    if (background.missing) {
         //no image yet: the plain title
         drawTextCentered("LOG JAM NINJA", kMiddle + 3.0f, 123.0f, 60, style::kShadeStrong);
         drawTextCentered("LOG JAM NINJA", kMiddle, 120.0f, 60, style::kGold);
@@ -167,6 +174,8 @@ void Game::handleSettingsKeys() {
 }
 
 void Game::drawSettings() {
+    //the art has a clearing in the middle, where the menu goes
+    drawBackground(m_assets.manifest().sprites.ui.settings_background);
     DrawText("SETTINGS", 410, 24, style::kHeadingSize, style::kText);
     m_menuView.draw(m_settingsMenu, kSettingsArea);
 }

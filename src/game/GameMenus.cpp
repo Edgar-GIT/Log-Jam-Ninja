@@ -14,7 +14,7 @@ namespace {
 
 //where each menu is drawn
 constexpr Rectangle kLevelArea{250.0f, 80.0f, 460.0f, 390.0f};
-constexpr Rectangle kSettingsArea{250.0f, 70.0f, 460.0f, 400.0f};
+constexpr Rectangle kSettingsArea{250.0f, 100.0f, 460.0f, 400.0f};
 constexpr Rectangle kControlsArea{210.0f, 60.0f, 540.0f, 420.0f};
 constexpr Rectangle kPauseArea{330.0f, 160.0f, 300.0f, 190.0f};
 constexpr Rectangle kCompleteArea{330.0f, 190.0f, 300.0f, 150.0f};
@@ -51,7 +51,7 @@ void Game::handleTitleKeys() {
     //the title uses the sprite buttons, the view turns the mouse into menu events
     const Vector2 mouse = m_screen.toPicture(m_input.mousePosition());
     const MenuEvent mouseEvent =
-        m_titleButtons.updateMouse(m_titleMenu, mouse, m_input.mousePressed(), m_input.mouseDown());
+        m_titleButtons.updateMouse(m_titleMenu, mouse, m_input.mouseMoved(), m_input.mousePressed(), m_input.mouseDown());
     const MenuEvent chosen = event.kind != EventKind::None ? event : mouseEvent;
 
     //the title is the first screen, there is nowhere to go back to
@@ -179,7 +179,7 @@ void Game::drawSettings() {
 
     //the settings screen uses the font of the game, the rest of the menus still use the font of raylib
     const Font& font = m_assets.menuFont();
-    DrawTextEx(font, "SETTINGS", Vector2{410.0f, 24.0f}, static_cast<float>(style::kHeadingSize), 1.0f, style::kText);
+    DrawTextEx(font, "SETTINGS", Vector2{410.0f, 54.0f}, static_cast<float>(style::kHeadingSize), 1.0f, style::kText);
     m_menuView.draw(m_settingsMenu, kSettingsArea, font);
 }
 

@@ -53,10 +53,20 @@ void Input::update(const KeyBindings& bindings) {
         m_pressed[index(action)] = pressed;
     }
 
-    //the mouse: it is only interesting when it moves or when a button is pressed
-    const Vector2 mouse = GetMousePosition();
-    m_mouseMoved = mouse.x != m_mouse.x || mouse.y != m_mouse.y;
-    m_mouse = mouse;
+    //the mouse: it is only interesting when it moves or when a button is pressed.
+    //it is measured from the window, so the first frame (before raylib polls it) and the frames where the window
+    //is being placed change the point without the mouse moving. those are not moves of the mouse
+    m_mouse = GetMousePosition();
+    const Vector2 window = GetWindowPosition();
+    const Vector2 onScreen{m_mouse.x + window.x, m_mouse.y + window.y};
+    const bool windowMoved = m_framesSeen > 0 && (window.x != m_window.x || window.y != m_window.y);
+    const bool placing = windowMoved || m_placing;
+    m_window = window;
+    m_placing = windowMoved;
+    m_mouseMoved =
+        m_framesSeen > 1 && !placing && (onScreen.x != m_mouseOnScreen.x || onScreen.y != m_mouseOnScreen.y);
+    m_mouseOnScreen = onScreen;
+    ++m_framesSeen;
 }
 
 bool Input::down(Action action) const noexcept {

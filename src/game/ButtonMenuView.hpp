@@ -34,8 +34,13 @@ public:
     //the picture is drawn at this size compared with the sheet (1 means the sheet pixels are screen pixels)
     void setScale(float scale) noexcept { m_scale = scale; }
 
-    //the mouse in picture pixels: moving over a button selects it, a click uses it
-    MenuEvent updateMouse(Menu& menu, Vector2 mouse, bool pressed, bool down);
+    //the mouse in picture pixels: moving over a button selects it, a click uses it.
+    //moved is true when the mouse really moved this frame (a window that is being placed is not a move)
+    MenuEvent updateMouse(Menu& menu, Vector2 mouse, bool moved, bool pressed, bool down);
+
+    //the mouse does not take control before this time: the window system moves the pointer when a window opens,
+    //and that is not the player moving the mouse
+    void holdMouse(double seconds) noexcept { m_mouseHoldUntil = GetTime() + seconds; }
 
     //the keys: the arrows move by where the buttons are on the screen (the sheet is not a plain column),
     //confirm and back are passed to the menu
@@ -64,10 +69,9 @@ private:
     const Sprite* m_sheet{nullptr};
     float m_scale{1.0f};
 
-    //the mouse: the last position, the button under it, and whether the mouse (and not the keyboard) is in control
-    Vector2 m_lastMouse{0.0f, 0.0f};
-    bool m_seenMouse{false};
+    //the mouse: the button under it, whether the mouse (and not the keyboard) is in control, and until when it is held
     bool m_mouseMode{false};
+    double m_mouseHoldUntil{0.0};
     int m_mouseIndex{-1};
     int m_lastCursor{0};
 };

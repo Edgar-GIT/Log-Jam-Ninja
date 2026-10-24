@@ -31,12 +31,8 @@ bool ButtonMenuView::isHot(const Menu& menu, int index) const noexcept {
     return !m_mouseMode || index == m_mouseIndex;
 }
 
-MenuEvent ButtonMenuView::updateMouse(Menu& menu, Vector2 mouse, bool pressed, [[maybe_unused]] bool down) {
-    //the mouse only takes control when it really moves (the first frame only remembers where it is)
-    const bool moved = m_seenMouse && (mouse.x != m_lastMouse.x || mouse.y != m_lastMouse.y);
-    m_lastMouse = mouse;
-    m_seenMouse = true;
-
+MenuEvent ButtonMenuView::updateMouse(Menu& menu, Vector2 mouse, bool moved, bool pressed,
+                                      [[maybe_unused]] bool down) {
     if (usesFallback()) {
         return m_fallback.updateMouse(menu, mouse, moved, pressed);
     }
@@ -46,7 +42,8 @@ MenuEvent ButtonMenuView::updateMouse(Menu& menu, Vector2 mouse, bool pressed, [
         m_mouseMode = false;
     }
 
-    if (moved) {
+    //the mouse only takes control after the hold (a click ends it at once), so the title opens on play
+    if (moved && (pressed || GetTime() >= m_mouseHoldUntil)) {
         m_mouseMode = true;
     }
 

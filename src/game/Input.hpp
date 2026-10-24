@@ -51,7 +51,13 @@ private:
     bool m_down[kActionCount]{};
     bool m_pressed[kActionCount]{};
 
+    //the mouse in window coordinates, and the same point in screen coordinates
+    //(the window position is added so moving the window is not a move of the mouse)
     Vector2 m_mouse{0.0f, 0.0f};
+    Vector2 m_mouseOnScreen{0.0f, 0.0f};
+    Vector2 m_window{0.0f, 0.0f};
+    int m_framesSeen{0};
+    bool m_placing{false};
     bool m_mouseMoved{false};
 };
 

@@ -52,6 +52,9 @@ Game::Game(const std::filesystem::path& executableDir, const std::filesystem::pa
 
     buildTitleMenu();
 
+    //the title opens with play selected: the pointer is only followed after the window has settled
+    m_titleButtons.holdMouse(0.6);
+
     //a map given in the command line starts right away
     if (!mapPath.empty()) {
         m_levelId = mapPath.stem().string();
@@ -136,6 +139,18 @@ void Game::draw() {
     }
 
     m_screen.endPicture();
+    static int frames = 0;
+    ++frames;
+    if (frames == 20) {
+        m_screen.savePicture("/tmp/opencode/title_start.png");
+    }
+    static int settingsFrames = 0;
+    if (m_scenes.current() == Scene::Settings) {
+        ++settingsFrames;
+        if (settingsFrames == 30) {
+            m_screen.savePicture("/tmp/opencode/settings_down.png");
+        }
+    }
     m_screen.present();
 }
 

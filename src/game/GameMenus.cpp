@@ -14,8 +14,8 @@ namespace {
 
 //where each menu is drawn
 constexpr Rectangle kLevelArea{250.0f, 80.0f, 460.0f, 390.0f};
-constexpr Rectangle kSettingsArea{250.0f, 100.0f, 460.0f, 400.0f};
-constexpr Rectangle kControlsArea{210.0f, 60.0f, 540.0f, 420.0f};
+constexpr Rectangle kSettingsArea{250.0f, 120.0f, 460.0f, 400.0f};
+constexpr Rectangle kControlsArea{210.0f, 96.0f, 540.0f, 420.0f};
 constexpr Rectangle kPauseArea{330.0f, 160.0f, 300.0f, 190.0f};
 constexpr Rectangle kCompleteArea{330.0f, 190.0f, 300.0f, 150.0f};
 
@@ -179,7 +179,7 @@ void Game::drawSettings() {
 
     //the settings screen uses the font of the game, the rest of the menus still use the font of raylib
     const Font& font = m_assets.menuFont();
-    DrawTextEx(font, "SETTINGS", Vector2{410.0f, 54.0f}, static_cast<float>(style::kHeadingSize), 1.0f, style::kText);
+    DrawTextEx(font, "SETTINGS", Vector2{410.0f, 74.0f}, static_cast<float>(style::kHeadingSize), 1.0f, style::kText);
     m_menuView.draw(m_settingsMenu, kSettingsArea, font);
 }
 
@@ -245,13 +245,18 @@ void Game::handleControlsKeys() {
 }
 
 void Game::drawControls() {
-    DrawText("CONTROLS", 405, 20, style::kHeadingSize, style::kText);
-    DrawText("choose an action and press enter to give it another key", 260, 54, style::kSmallSize, style::kTextDim);
-    m_menuView.draw(m_controlsMenu, kControlsArea);
+    //the controls screen uses the same art and font as the settings
+    drawBackground(m_assets.manifest().sprites.ui.settings_background);
+    const Font& font = m_assets.menuFont();
+    DrawTextEx(font, "CONTROLS", Vector2{405.0f, 40.0f}, static_cast<float>(style::kHeadingSize), 1.0f, style::kText);
+    DrawTextEx(font, "choose an action and press enter to give it another key", Vector2{260.0f, 76.0f},
+               static_cast<float>(style::kSmallSize), 1.0f, style::kTextDim);
+    m_menuView.draw(m_controlsMenu, kControlsArea, font);
 
     if (m_capturing) {
         DrawRectangle(180, 470, 600, 46, style::kPanel);
-        DrawText("press a key (escape to keep the old one)", 210, 480, style::kItemSize, style::kAccent);
+        DrawTextEx(font, "press a key (escape to keep the old one)", Vector2{210.0f, 480.0f},
+                   static_cast<float>(style::kItemSize), 1.0f, style::kAccent);
     }
 }
 

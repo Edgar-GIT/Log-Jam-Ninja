@@ -11,6 +11,8 @@ Screen::Screen(const char* title, bool fullscreen, bool vsync, bool integerScale
     : m_integerScale(integerScale), m_vsync(vsync) {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(kWidth, kHeight, title);
+    //escape belongs to the menus, so it does not close the window
+    SetExitKey(KEY_NULL);
     SetWindowMinSize(kWidth, kHeight);
 
     //the frame rate is limited instead of using the vsync of the monitor, so it can be changed while playing
@@ -74,12 +76,6 @@ Vector2 Screen::toPicture(Vector2 windowPosition) const noexcept {
     const Rectangle area = destination();
     const float size = scale();
     return {(windowPosition.x - area.x) / size, (windowPosition.y - area.y) / size};
-}
-
-void Screen::savePicture(const char* path) {
-    Image image = LoadImageFromTexture(m_picture.texture);
-    ExportImage(image, path);
-    UnloadImage(image);
 }
 
 void Screen::present() {

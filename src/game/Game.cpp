@@ -139,18 +139,6 @@ void Game::draw() {
     }
 
     m_screen.endPicture();
-    static int frames = 0;
-    ++frames;
-    if (frames == 20) {
-        m_screen.savePicture("/tmp/opencode/title_start.png");
-    }
-    static int settingsFrames = 0;
-    if (m_scenes.current() == Scene::Settings) {
-        ++settingsFrames;
-        if (settingsFrames == 30) {
-            m_screen.savePicture("/tmp/opencode/settings_down.png");
-        }
-    }
     m_screen.present();
 }
 
